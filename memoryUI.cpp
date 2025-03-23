@@ -73,6 +73,15 @@ public:
                 if (memory_access_stage == stage) {
                     cycle_count--;
                     if (cycle_count == 0) {
+                        if (cache[line_index].dirty) {
+                            // line_index = address % cache size
+                            // tag = address / cache size
+                            // so address = (tag * cache size) + line_index
+                            int oldaddr = (cache[line_index].tag * (CACHE_LINES * WORDS_PER_LINE)) + line_index;
+                            for (int i = 0; i < WORDS_PER_LINE; i++) {
+                                ram[(oldaddr / WORDS_PER_LINE) * WORDS_PER_LINE + i] = cache[line_index].data[i];
+                            }
+                        }
                         cache[line_index].valid = true;
                         cache[line_index].tag = tag;
                         cache[line_index].dirty = false;
