@@ -10,11 +10,19 @@ constexpr int WORDS_PER_LINE = 4;
 constexpr int RAM_SIZE = 32768;
 constexpr int MEMORY_DELAY = 3;
 
+constexpr int STATUS_WAIT = 0;
+constexpr int STATUS_DONE = 1;
+
 struct CacheLine {
     bool valid = false;
     bool dirty = false;
     int tag = -1;
     vector<int> data = vector<int>(WORDS_PER_LINE, 0);
+};
+
+struct MemoryResult {
+    int status; // 0 = wait, 1 = done
+    int value; // only a reasonable value for reads
 };
 
 class MemorySystem {
@@ -27,7 +35,7 @@ private:
 public:
     MemorySystem() : ram(RAM_SIZE, 0), cache(CACHE_LINES) {}
 
-    void write(int address, int value, int stage) {
+    MemoryResult write(int address, int value, int stage) {
         int line_index = (address / WORDS_PER_LINE) % CACHE_LINES;
         int tag = address / (CACHE_LINES * WORDS_PER_LINE);
         int offset = address % WORDS_PER_LINE;
@@ -35,40 +43,40 @@ public:
         if (cache[line_index].valid && cache[line_index].tag == tag) {
             cache[line_index].data[offset] = value;
             cache[line_index].dirty = true;
-            cout << "done" << endl;
+            return {status: STATUS_DONE, value: 0};
         } else {
             if (cycle_count == 0) {
                 cycle_count = MEMORY_DELAY;
                 memory_access_stage = stage;
-                cout << "wait" << endl;
+                return {status: STATUS_WAIT, value: 0};
             } else {
                 if (memory_access_stage == stage) {
                     cycle_count--;
                     if (cycle_count == 0) {
                         ram[address] = value;
-                        cout << "done" << endl;
+                        return {status: STATUS_DONE, value: 0};
                     } else {
-                        cout << "wait" << endl;
+                        return {status: STATUS_WAIT, value: 0};
                     }
                 } else {
-                    cout << "wait" << endl;
+                    return {status: STATUS_WAIT, value: 0};
                 }
             }
         }
     }
 
-    void read(int address, int stage) {
+    MemoryResult read(int address, int stage) {
         int line_index = (address / WORDS_PER_LINE) % CACHE_LINES;
         int tag = address / (CACHE_LINES * WORDS_PER_LINE);
         int offset = address % WORDS_PER_LINE;
 
         if (cache[line_index].valid && cache[line_index].tag == tag) {
-            cout << "done " << cache[line_index].data[offset] << endl;
+            return {status: STATUS_DONE, value: cache[line_index].data[offset]};
         } else {
             if (cycle_count == 0) {
                 cycle_count = MEMORY_DELAY;
                 memory_access_stage = stage;
-                cout << "wait" << endl;
+                return {status: STATUS_WAIT, value: 0};
             } else {
                 if (memory_access_stage == stage) {
                     cycle_count--;
@@ -88,12 +96,12 @@ public:
                         for (int i = 0; i < WORDS_PER_LINE; i++) {
                             cache[line_index].data[i] = ram[(address / WORDS_PER_LINE) * WORDS_PER_LINE + i];
                         }
-                        cout << "done " << cache[line_index].data[offset] << endl;
+                        return {status: STATUS_DONE, value: cache[line_index].data[offset]};
                     } else {
-                        cout << "wait" << endl;
+                        return {status: STATUS_WAIT, value: 0};
                     }
                 } else {
-                    cout << "wait" << endl;
+                    return {status: STATUS_WAIT, value: 0};
                 }
             }
         }
@@ -116,24 +124,24 @@ public:
     }
 };
 
-int main() {
-    MemorySystem memSys;
-    string command;
-    int address, value, level, line, stage;
+// int main() {
+//     MemorySystem memSys;
+//     string command;
+//     int address, value, level, line, stage;
 
-    while (cin >> command) {
-        if (command == "W") {
-            cin >> value >> address >> stage;
-            memSys.write(address, value, stage);
-        } else if (command == "R") {
-            cin >> address >> stage;
-            memSys.read(address, stage);
-        } else if (command == "V") {
-            cin >> level >> line;
-            memSys.view(level, line);
-        } else {
-            cout << "Invalid command" << endl;
-        }
-    }
-    return 0;
-}
+//     while (cin >> command) {
+//         if (command == "W") {
+//             cin >> value >> address >> stage;
+//             memSys.write(address, value, stage);
+//         } else if (command == "R") {
+//             cin >> address >> stage;
+//             memSys.read(address, stage);
+//         } else if (command == "V") {
+//             cin >> level >> line;
+//             memSys.view(level, line);
+//         } else {
+//             cout << "Invalid command" << endl;
+//         }
+//     }
+//     return 0;
+// }
