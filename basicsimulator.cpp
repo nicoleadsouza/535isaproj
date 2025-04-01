@@ -19,10 +19,14 @@ using namespace std;
 constexpr int NUM_REGISTERS = 16;
 
 constexpr int STAGE_FETCH = 0;
-constexpr int STAGE_MEMORY = 1;
+constexpr int STAGE_DECODE = 1;
+constexpr int STAGE_EXECUTE = 2;
+constexpr int STAGE_MEMORY = 3;
+constexpr int STAGE_WRITEBACK = 4;
 
 constexpr int TYPE_ALU = 0;
 constexpr int TYPE_CONTROL = 1;
+constexpr int TYPE_MEMORY = 2;
 
 // struct CacheLine {
 //     bool valid = false;
@@ -75,6 +79,9 @@ struct Instruction {
     int immediate;
     int op1, op2;
     int result;
+    int writeback_val;
+    int stage; // last stage completed
+    bool has_writeback;
 };
 
 class Simulator {
@@ -84,6 +91,19 @@ private:
     MemorySystem memory;
     vector<Instruction> instructions;
     int cycle_count = 0;
+
+    bool evaluateCond(int cond, int op1, int op2) {
+        switch (cond) {
+            case 0: // equal
+                return op1 == op2;
+            case 1: // less than
+                return op1 < op2;
+            case 2: // greater than or equal
+                return op1 >= op2;
+            case 3: // not equal
+                return op1 != op2;
+        }
+    }
 
 public:
     Simulator() : registers(NUM_REGISTERS, 0), program_counter(0) {}
@@ -126,42 +146,91 @@ public:
     }
 
     Instruction decode(unsigned int inst) {
-        // TODO: may need to wait for operands to be available...
+        // TODO: deal with operands and dependencies
+        Instruction res;
         int opcode = (inst & 0xF8000000) >> 27; // highest 5 bits are the opcode
-        cout << "Opcode: " << opcode << endl;
-        if (opcode == 20) { // branch, format C: 5 bits opcode, 4 bits r0, 4 bits r1, 2 bits cond, 17 bits imm
+
+        // cout << "Opcode: " << opcode << endl;
+
+        if (opcode == 20) { // branch
+            //format C: 5 bits opcode, 4 bits r0, 4 bits r1, 2 bits cond, 17 bits imm
+
             int r0 = (inst & 0x07800000) >> 23;
-            cout << "R0: " << r0 << endl;
             int r1 = (inst & 0x00780000) >> 19;
-            cout << "R1: " << r1 << endl;
             int cond = (inst & 0x00060000) >> 17;
-            cout << "condition: " << cond << endl;
             int imm = inst & 0x0001FFFF;
-            cout << "immediate: " << imm << endl;
-            return {type: TYPE_CONTROL, opcode: opcode, r0: r0, r1: r1, cond: cond, immediate: imm};
-        } else { // instruction format A: 5 bits opcode, 4 bits r0, 4 bits r1, 4 bits r2, 15 bits imm
+
+            // cout << "R0: " << r0 << endl;
+            // cout << "R1: " << r1 << endl;
+            // cout << "condition: " << cond << endl;
+            // cout << "immediate: " << imm << endl;
+
+            res = {type: TYPE_CONTROL, opcode: opcode, r0: r0, r1: r1, cond: cond, immediate: imm, has_writeback: false};
+        } else {
+            // format A: 5 bits opcode, 4 bits r0, 4 bits r1, 4 bits r2, 15 bits imm
             int r0 = (inst & 0x07800000) >> 23;
-            cout << "R0: " << r0 << endl;
             int r1 = (inst & 0x00780000) >> 19;
-            cout << "R1: " << r1 << endl;
             int r2 = (inst & 0x00078000) >> 15;
-            cout << "R2: " << r2 << endl;
             int imm = inst & 0x00007FFF;
-            cout << "immediate: " << imm << endl;
-            return {type: TYPE_ALU, opcode: opcode, r0: r0, r1: r1, r2: r2, immediate: imm};
+
+            // cout << "R0: " << r0 << endl;
+            // cout << "R1: " << r1 << endl;
+            // cout << "R2: " << r2 << endl;
+            // cout << "immediate: " << imm << endl;
+
+            int type = (opcode == 0 || opcode == 1) ? TYPE_MEMORY : TYPE_ALU;
+            bool has_writeback = opcode == 1 ? false : true;
+
+            res = {type: type, opcode: opcode, r0: r0, r1: r1, r2: r2, immediate: imm, has_writeback: has_writeback};
         }
+
+        return res;
     }
 
     Instruction execute(Instruction inst) {
-        // TODO: execute
+        int res;
+        switch (inst.opcode) {
+            case 0: // load
+                // same as store, so fall through
+            case 1: // store
+                res = inst.op1 + inst.op1 + inst.immediate;
+                break;
+            case 5: // add
+                res = inst.op1 + inst.op2;
+                break;
+            case 7: // sub
+                res = inst.op1 - inst.op2;
+                break;
+            case 20: // branch
+                if (evaluateCond(inst.cond, inst.op1, inst.op2)) {
+                    program_counter += inst.immediate;
+                    // TODO: squash everything in the pipe
+                }
+                break;
+        }
     }
 
     Instruction memory(Instruction inst) {
-        // TODO: memory
+        if (inst.type != TYPE_MEMORY) {
+            return inst;
+        }
+        if (inst.opcode == 0) { // load
+            MemoryResult res = memory.read(inst.result, STAGE_MEMORY);
+            if (res.status == STATUS_DONE) {
+                inst.writeback_val = res.value;
+                return inst;
+            } // TODO: else stall...
+        } else { // == 1, store
+            MemoryResult res = memory.write(inst.result, inst.op1, STAGE_MEMORY);
+            // TODO: if status not done, stall...
+            return inst;
+        }
     }
 
     void writeback(Instruction inst) {
-        // TODO: writeback
+        if (inst.has_writeback) {
+            registers[inst.r0] = inst.writeback_val;
+        }
     }
 };
 
