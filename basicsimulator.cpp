@@ -1,114 +1,176 @@
 #include <iostream>
+#include <fstream>
 #include <vector>
-#include <unordered_map>
-#include <iomanip>
-#include <QtWidgets/QApplication>
-#include <QtWidgets/QMainWindow>
-#include <QtWidgets/QTableWidget>
-#include <QtWidgets/QPushButton> // for Qt UI
+#include <cstdint>
+#include <string>
+#include "memoryUI.cpp"
 
 using namespace std;
 
-constexpr int CACHE_LINES = 16;
-constexpr int WORDS_PER_LINE = 4;
-constexpr int RAM_SIZE = 32768;
-constexpr int MEMORY_DELAY = 3;
-constexpr int NUM_REGISTERS = 16;
-
-struct CacheLine {
-    bool valid = false;
-    bool dirty = false;
-    int tag = -1;
-    vector<int> data = vector<int>(WORDS_PER_LINE, 0);
-};
-
-class MemorySystem {
-private:
-    vector<int> ram;
-    vector<CacheLine> cache;
-    int cycle_count = 0;
-    int memory_access_stage = -1;
-
-public:
-    MemorySystem() : ram(RAM_SIZE, 0), cache(CACHE_LINES) {}
-
-    void write(int address, int value) {
-        int line_index = (address / WORDS_PER_LINE) % CACHE_LINES;
-        int tag = address / (CACHE_LINES * WORDS_PER_LINE);
-        int offset = address % WORDS_PER_LINE;
-
-        if (cache[line_index].valid && cache[line_index].tag == tag) {
-            cache[line_index].data[offset] = value;
-            cache[line_index].dirty = true;
-        } else {
-            ram[address] = value;
-        }
-    }
-
-    int read(int address) {
-        int line_index = (address / WORDS_PER_LINE) % CACHE_LINES;
-        int tag = address / (CACHE_LINES * WORDS_PER_LINE);
-        int offset = address % WORDS_PER_LINE;
-
-        if (cache[line_index].valid && cache[line_index].tag == tag) {
-            return cache[line_index].data[offset];
-        } else {
-            return ram[address];
-        }
-    }
-};
+enum Stage { FETCH, DECODE, EXECUTE, MEMORY, WRITEBACK };
 
 struct Instruction {
-    int opcode;
-    int r0, r1, r2;
-    int immediate;
+    uint32_t raw = 0;
+    int pc = 0;
+    bool valid = false;
 };
 
-class Simulator {
+class PipelineSimulator {
 private:
-    vector<int> registers;
-    int program_counter;
     MemorySystem memory;
-    vector<Instruction> instructions;
+    vector<Instruction> pipeline;
+    vector<int> registers;
+    int pc = 0;
     int cycle_count = 0;
+    bool running = false;
+    int breakpoint = -1;
 
 public:
-    Simulator() : registers(NUM_REGISTERS, 0), program_counter(0) {}
+    PipelineSimulator() : pipeline(5), registers(32, 0) {}
 
-    void loadProgram(vector<Instruction> instrs) {
-        instructions = instrs;
+    void reset() {
+        pc = 0;
+        cycle_count = 0;
+        running = false;
+        registers.assign(32, 0);
+        pipeline = vector<Instruction>(5);
+        memory.reset();
+        cout << "Simulator reset.\n";
+    }
+
+    void load_program(const string& filename) {
+        ifstream file(filename, ios::binary);
+        if (!file) {
+            cout << "Failed to open program.\n";
+            return;
+        }
+        int addr = 0;
+        uint32_t instr;
+        while (file.read(reinterpret_cast<char*>(&instr), sizeof(instr))) {
+            memory.write(addr++, instr, 3);  // Use stage 3 for write
+        }
+        cout << "Program loaded.\n";
     }
 
     void step() {
-        if (program_counter >= instructions.size()) return;
-        Instruction instr = instructions[program_counter++];
         cycle_count++;
-        
-        switch (instr.opcode) {
-            case 0: // load
-                registers[instr.r0] = memory.read(registers[instr.r1] + instr.immediate);
+
+        // WB stage
+        if (pipeline[WRITEBACK].valid) {
+            uint32_t inst = pipeline[WRITEBACK].raw;
+            int opcode = (inst >> 26) & 0x3F;
+            int rd = (inst >> 16) & 0x1F;
+            int result = registers[rd];  // would be updated in EX/MEM stages
+            if (opcode == 0x00 || opcode == 0x01 || opcode == 0x02) {
+                cout << "WB: R" << rd << " = " << result << endl;
+            }
+        }
+
+        // MEM stage
+        if (pipeline[MEMORY].valid) {
+            uint32_t inst = pipeline[MEMORY].raw;
+            int opcode = (inst >> 26) & 0x3F;
+            int rs1 = (inst >> 21) & 0x1F;
+            int rd = (inst >> 16) & 0x1F;
+            int imm = inst & 0x7FF;
+
+            if (opcode == 0x02) {  // LOAD
+                auto [done, val] = memory.read(registers[rs1] + imm, MEMORY);
+                if (done) registers[rd] = val;
+            } else if (opcode == 0x03) {  // STORE
+                memory.write(registers[rs1] + imm, registers[rd], MEMORY);
+            }
+        }
+
+        // EXECUTE stage
+        if (pipeline[EXECUTE].valid) {
+            uint32_t inst = pipeline[EXECUTE].raw;
+            int opcode = (inst >> 26) & 0x3F;
+            int rs1 = (inst >> 21) & 0x1F;
+            int rs2 = (inst >> 16) & 0x1F;
+            int rd = (inst >> 11) & 0x1F;
+            int imm = inst & 0x7FF;
+
+            if (opcode == 0x00) registers[rd] = registers[rs1] + registers[rs2]; // ADD
+            else if (opcode == 0x01) registers[rd] = registers[rs1] + imm;       // ADDI
+        }
+
+        // ID stage: no-op for now
+
+        // IF stage: fetch next instruction
+        auto [done, val] = memory.read(pc, FETCH);
+        Instruction fetched;
+        if (done) {
+            fetched.raw = val;
+            fetched.pc = pc;
+            fetched.valid = true;
+            pc++;
+        }
+
+        // shift pipeline
+        for (int i = WRITEBACK; i > 0; i--) pipeline[i] = pipeline[i - 1];
+        pipeline[0] = fetched;
+    }
+
+    void run(int n = -1) {
+        running = true;
+        int count = 0;
+        while (running && (n == -1 || count < n)) {
+            step();
+            count++;
+            if (breakpoint != -1 && pc == breakpoint) {
+                cout << "Hit breakpoint at PC=" << pc << "\n";
                 break;
-            case 1: // store
-                memory.write(registers[instr.r1] + instr.immediate, registers[instr.r0]);
-                break;
-            case 5: // add
-                registers[instr.r0] = registers[instr.r1] + registers[instr.r2];
-                break;
-            case 7: // sub
-                registers[instr.r0] = registers[instr.r1] - registers[instr.r2];
-                break;
-            case 20: // branch
-                if (registers[instr.r0] == registers[instr.r1])
-                    program_counter += instr.immediate;
-                break;
+            }
+        }
+    }
+
+    void set_breakpoint(int addr) {
+        breakpoint = addr;
+        cout << "Breakpoint set at PC=" << addr << "\n";
+    }
+
+    void print_state() {
+        cout << "Cycle: " << cycle_count << " | PC: " << pc << "\n";
+        for (int i = 0; i < 8; i++) {
+            cout << "R" << i << ": " << registers[i] << "\t";
+            if (i % 4 == 3) cout << "\n";
         }
     }
 };
 
-int main(int argc, char *argv[]) {
-    QApplication app(argc, argv);
-    QMainWindow window;
-    window.setWindowTitle("CacheFlow Simulator");
-    window.show();
-    return app.exec();
+// -------- simple command line UI --------
+
+int main() {
+    PipelineSimulator sim;
+    string cmd;
+
+    cout << "Simulator ready. Type commands:\n";
+
+    while (cin >> cmd) {
+        if (cmd == "load") {
+            string file;
+            cin >> file;
+            sim.load_program(file);
+        } else if (cmd == "run") {
+            int cycles;
+            if (cin >> cycles) sim.run(cycles);
+            else sim.run();
+        } else if (cmd == "step") {
+            sim.step();
+        } else if (cmd == "bp") {
+            int bp;
+            cin >> bp;
+            sim.set_breakpoint(bp);
+        } else if (cmd == "state") {
+            sim.print_state();
+        } else if (cmd == "reset") {
+            sim.reset();
+        } else if (cmd == "exit") {
+            break;
+        } else {
+            cout << "Unknown command.\n";
+        }
+    }
+    return 0;
 }
