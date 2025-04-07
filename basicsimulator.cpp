@@ -59,7 +59,7 @@ private:
     string getStageDisplay(Instruction inst, int stage) {
         if (inst.is_empty) return "empty";
         if (inst.stall) return "stall";
-        if (stage == STAGE_FETCH) return to_string(inst.binary);
+        if (stage == STAGE_FETCH || stage == STAGE_DECODE) return to_string(inst.addr);
         switch (inst.opcode) {
             case 0: return "LOAD";
             case 1: return "STR";
@@ -91,10 +91,11 @@ public:
     }
 
     int step() {
-        if (!pipeline[STAGE_WRITEBACK].is_empty)
+        if (!pipeline[STAGE_WRITEBACK].is_empty) {
             if (writeback(pipeline[STAGE_WRITEBACK]) == FLAG_HALT)
                 return FLAG_HALT;
-        pipeline[STAGE_WRITEBACK].is_empty = true;
+            pipeline[STAGE_WRITEBACK].is_empty = true;
+        }
 
         if (!pipeline[STAGE_MEMORY].is_empty) {
             Instruction res = memory(pipeline[STAGE_MEMORY]);
@@ -114,17 +115,17 @@ public:
             if (!res.stall) pipeline[STAGE_DECODE].is_empty = true;
         }
 
+        if (!pipeline[STAGE_FETCH].is_empty) {
+            Instruction res = fetch(pipeline[STAGE_FETCH]);
+            pipeline[STAGE_DECODE] = res;
+            if (!res.stall) pipeline[STAGE_FETCH].is_empty = true;
+        }
+
         if (pipeline[STAGE_FETCH].is_empty && !pipeline_halted) {
             Instruction inst;
             inst.addr = program_counter;
             inst.is_empty = false;
             pipeline[STAGE_FETCH] = inst;
-        }
-
-        if (!pipeline[STAGE_FETCH].is_empty) {
-            Instruction res = fetch(pipeline[STAGE_FETCH]);
-            pipeline[STAGE_DECODE] = res;
-            if (!res.stall) pipeline[STAGE_FETCH].is_empty = true;
         }
 
         cycle_count++;
