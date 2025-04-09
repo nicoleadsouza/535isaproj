@@ -22,16 +22,17 @@ constexpr int FLAG_RUNNING = 0;
 
 // instruction structure
 struct Instruction {
-    int addr = 0;
-    unsigned int binary = 0;
-    int type = 0;
-    int opcode = 0;
-    int r0 = 0, r1 = 0, r2 = 0;
-    int cond = 0;
-    int immediate = 0;
-    int op1 = 0, op2 = 0;
-    int result = 0;
-    int writeback_val = 0;
+    int addr = -1;
+    unsigned int binary = -1;
+    int type = -1;
+    int opcode = -1;
+    int r0 = -1, r1 = -1, r2 = -1;
+    int cond = -1;
+    int immediate = -1;
+    int op1 = -1, op2 = -1;
+    int result = -1;
+    int writeback_val = -1;
+    int target = -1;
     bool has_writeback = false;
     bool stall = false;
     bool is_empty = true;
@@ -97,28 +98,36 @@ public:
             pipeline[STAGE_WRITEBACK].is_empty = true;
         }
 
-        if (!pipeline[STAGE_MEMORY].is_empty) {
+        if (!pipeline[STAGE_MEMORY].is_empty && pipeline[STAGE_WRITEBACK].is_empty) {
             Instruction res = memory(pipeline[STAGE_MEMORY]);
-            pipeline[STAGE_WRITEBACK] = res;
-            if (!res.stall) pipeline[STAGE_MEMORY].is_empty = true;
+            if (!res.stall)  {
+                pipeline[STAGE_WRITEBACK] = res;
+                pipeline[STAGE_MEMORY].is_empty = true;
+            }
         }
 
-        if (!pipeline[STAGE_EXECUTE].is_empty) {
+        if (!pipeline[STAGE_EXECUTE].is_empty && pipeline[STAGE_MEMORY].is_empty) {
             Instruction res = execute(pipeline[STAGE_EXECUTE]);
-            pipeline[STAGE_MEMORY] = res;
-            if (!res.stall) pipeline[STAGE_EXECUTE].is_empty = true;
+            if (!res.stall) {
+                pipeline[STAGE_MEMORY] = res;
+                pipeline[STAGE_EXECUTE].is_empty = true;
+            }
         }
 
-        if (!pipeline[STAGE_DECODE].is_empty) {
+        if (!pipeline[STAGE_DECODE].is_empty && pipeline[STAGE_EXECUTE].is_empty) {
             Instruction res = decode(pipeline[STAGE_DECODE]);
-            pipeline[STAGE_EXECUTE] = res;
-            if (!res.stall) pipeline[STAGE_DECODE].is_empty = true;
+            if (!res.stall) {
+                pipeline[STAGE_EXECUTE] = res;
+                pipeline[STAGE_DECODE].is_empty = true;
+            }
         }
 
-        if (!pipeline[STAGE_FETCH].is_empty) {
+        if (!pipeline[STAGE_FETCH].is_empty && pipeline[STAGE_DECODE].is_empty) {
             Instruction res = fetch(pipeline[STAGE_FETCH]);
-            pipeline[STAGE_DECODE] = res;
-            if (!res.stall) pipeline[STAGE_FETCH].is_empty = true;
+            if (!res.stall) {
+                pipeline[STAGE_DECODE] = res;
+                pipeline[STAGE_FETCH].is_empty = true;
+            }
         }
 
         if (pipeline[STAGE_FETCH].is_empty && !pipeline_halted) {
@@ -147,6 +156,7 @@ public:
         if (res.status == STATUS_DONE) {
             Instruction new_inst;
             new_inst.binary = res.value;
+            new_inst.addr = inst.addr;
     
             if (res.value == 0) {
                 // treat binary 0 as HALT signal
@@ -174,6 +184,7 @@ public:
         }
 
         Instruction res;
+        res.addr = inst.addr;
         int opcode = (inst.binary & 0xF8000000) >> 27;
 
         if (opcode == 20) {
@@ -185,10 +196,10 @@ public:
             res.opcode = opcode;
             res.r0 = r0;
             res.r1 = r1;
+            res.op1 = r0;
+            res.op2 = r1;
             res.cond = cond;
             res.immediate = imm;
-            res.op1 = registers[r0];
-            res.op2 = registers[r1];
             res.has_writeback = false;
         } else {
             int r0 = (inst.binary & 0x07800000) >> 23;
@@ -200,11 +211,27 @@ public:
             res.r0 = r0;
             res.r1 = r1;
             res.r2 = r2;
+            res.op1 = r1;
+            res.op2 = r2;
+            res.target = r0;
             res.immediate = imm;
-            res.op1 = registers[r1];
-            res.op2 = registers[r2];
             res.has_writeback = opcode != 1;
         }
+
+        // handle dependencies
+        // search for instructions in pipe targeting the operands
+        for (int i = STAGE_EXECUTE; i <= STAGE_WRITEBACK; i++) {
+            if (!pipeline[i].is_empty && pipeline[i].has_writeback && (pipeline[i].target == res.op1 || pipeline[i].target == res.op2)) {
+                // cout << "instruction " << res.addr << " has dependency on instruction " << pipeline[i].addr << endl;
+                // dependency is in the pipe, so we need to stall
+                res.stall = true;
+                res.is_empty = false;
+                return res;
+            }
+        }
+        // no dependencies in pipe, fetch operands
+        res.op1 = registers[res.op1];
+        res.op2 = registers[res.op2];
 
         res.is_empty = false;
         return res;
@@ -252,6 +279,7 @@ public:
 
     int writeback(Instruction inst) {
         if (inst.is_empty) return FLAG_RUNNING;
+        if (inst.type == TYPE_ALU) inst.writeback_val = inst.result;
         if (inst.has_writeback) registers[inst.r0] = inst.writeback_val;
         return FLAG_RUNNING;
     }
