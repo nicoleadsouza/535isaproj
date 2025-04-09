@@ -29,7 +29,7 @@ struct Instruction {
     int r0 = -1, r1 = -1, r2 = -1;
     int cond = -1;
     int immediate = -1;
-    int op1 = -1, op2 = -1;
+    int op1 = -1, op2 = -1, op3 = -1;
     int result = -1;
     int writeback_val = -1;
     int target = -1;
@@ -247,6 +247,7 @@ public:
             res.r1 = r1;
             res.r2 = r2;
             res.op1 = r1;
+            if (res.opcode == 1) res.op3 = r0;
             res.op2 = r2;
             res.target = r0;
             res.immediate = imm;
@@ -256,7 +257,7 @@ public:
         // handle dependencies
         // search for instructions in pipe targeting the operands
         for (int i = STAGE_EXECUTE; i <= STAGE_WRITEBACK; i++) {
-            if (!pipeline[i].is_empty && pipeline[i].has_writeback && (pipeline[i].target == res.op1 || pipeline[i].target == res.op2)) {
+            if (!pipeline[i].is_empty && pipeline[i].has_writeback && (pipeline[i].target == res.op1 || pipeline[i].target == res.op2 || pipeline[i].target == res.op3)) {
                 cout << "instruction " << res.addr << "(" << getOperationName(res.opcode) << ")";
                 cout << " has dependency on instruction " << pipeline[i].addr <<"(" << getOperationName(pipeline[i].opcode) << ")" << endl;
                 // dependency is in the pipe, so we need to stall
@@ -268,6 +269,7 @@ public:
         // no dependencies in pipe, fetch operands
         res.op1 = registers[res.op1];
         res.op2 = registers[res.op2];
+        if (res.op3 != -1) res.op3 = registers[res.op3];
 
         res.is_empty = false;
         return res;
@@ -308,9 +310,11 @@ public:
                 return inst;
             }
         } else {
-            MemoryResult res = memory_system.write(inst.result, inst.op1, STAGE_MEMORY);
+            MemoryResult res = memory_system.write(inst.result, inst.op3, STAGE_MEMORY);
             if (res.status == STATUS_DONE) return inst;
             inst.hazard = true;
+            cout << "memory for instruction " << inst.addr << "(" << getOperationName(inst.opcode) << ")";
+            cout << " missed cache, waiting for RAM" << endl;
             return inst;
         }
     }
@@ -333,6 +337,10 @@ public:
         for (int i = 0; i < NUM_REGISTERS; i++)
             cout << "R" << setw(2) << i << ": " << registers[i] << "\n";
     }
+
+    void viewMemory (int level, int line) {
+        return memory_system.view(level, line);
+    }
 };
 
 // simple command line UI, did not get around to using Qt or something more advanced 
@@ -344,7 +352,7 @@ int main() {
     cout << "starting CacheFlow pipeline simulator...\n";
 
     while (true) {
-        cout << "\n> enter command (load/run/step/view/reset/exit): ";
+        cout << "\n> enter command (load/run/step/view/reset/exit/viewmem [level] [line]): ";
         cin >> command;
 
         if (command == "load") {
@@ -374,6 +382,10 @@ int main() {
             cout << "Simulator reset.\n";
         } else if (command == "exit") {
             break;
+        } else if (command == "viewmem") {
+            int level, line;
+            cin >> level >> line;
+            sim.viewMemory(level, line);
         } else {
             cout << "Unknown command.\n";
         }
