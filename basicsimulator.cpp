@@ -34,6 +34,7 @@ struct Instruction {
     int writeback_val = -1;
     int target = -1;
     bool has_writeback = false;
+    bool hazard = false;
     bool stall = false;
     bool is_empty = true;
 };
@@ -60,8 +61,13 @@ private:
     string getStageDisplay(Instruction inst, int stage) {
         if (inst.is_empty) return "empty";
         if (inst.stall) return "stall";
-        if (stage == STAGE_FETCH || stage == STAGE_DECODE) return to_string(inst.addr);
-        switch (inst.opcode) {
+        if (inst.hazard) return "hazard";
+        if (inst.opcode == -1) return to_string(inst.addr);
+        return getOperationName(inst.opcode);
+    }
+
+    string getOperationName(int opcode) {
+        switch (opcode) {
             case 0: return "LOAD";
             case 1: return "STR";
             case 5: return "ADD";
@@ -98,35 +104,63 @@ public:
             pipeline[STAGE_WRITEBACK].is_empty = true;
         }
 
-        if (!pipeline[STAGE_MEMORY].is_empty && pipeline[STAGE_WRITEBACK].is_empty) {
-            Instruction res = memory(pipeline[STAGE_MEMORY]);
-            if (!res.stall)  {
-                pipeline[STAGE_WRITEBACK] = res;
-                pipeline[STAGE_MEMORY].is_empty = true;
+        if (!pipeline[STAGE_MEMORY].is_empty) {
+            pipeline[STAGE_MEMORY].stall = false;
+            if (pipeline[STAGE_WRITEBACK].is_empty) {
+                Instruction res = memory(pipeline[STAGE_MEMORY]);
+                if (!res.hazard)  {
+                    pipeline[STAGE_WRITEBACK] = res;
+                    pipeline[STAGE_MEMORY].is_empty = true;
+                } else {
+                    pipeline[STAGE_MEMORY].stall = true;
+                }
+            } else {
+                pipeline[STAGE_MEMORY].stall = true;
             }
         }
 
-        if (!pipeline[STAGE_EXECUTE].is_empty && pipeline[STAGE_MEMORY].is_empty) {
-            Instruction res = execute(pipeline[STAGE_EXECUTE]);
-            if (!res.stall) {
-                pipeline[STAGE_MEMORY] = res;
-                pipeline[STAGE_EXECUTE].is_empty = true;
+        if (!pipeline[STAGE_EXECUTE].is_empty) {
+            pipeline[STAGE_EXECUTE].stall = false;
+            if (pipeline[STAGE_MEMORY].is_empty) {
+                Instruction res = execute(pipeline[STAGE_EXECUTE]);
+                if (!res.hazard) {
+                    pipeline[STAGE_MEMORY] = res;
+                    pipeline[STAGE_EXECUTE].is_empty = true;
+                } else {
+                    pipeline[STAGE_EXECUTE].stall = true;
+                }
+            } else {
+                pipeline[STAGE_EXECUTE].stall = true;
             }
         }
 
-        if (!pipeline[STAGE_DECODE].is_empty && pipeline[STAGE_EXECUTE].is_empty) {
-            Instruction res = decode(pipeline[STAGE_DECODE]);
-            if (!res.stall) {
-                pipeline[STAGE_EXECUTE] = res;
-                pipeline[STAGE_DECODE].is_empty = true;
+        if (!pipeline[STAGE_DECODE].is_empty) {
+            pipeline[STAGE_DECODE].stall = false;
+            if (pipeline[STAGE_EXECUTE].is_empty) {
+                Instruction res = decode(pipeline[STAGE_DECODE]);
+                if (!res.hazard) {
+                    pipeline[STAGE_EXECUTE] = res;
+                    pipeline[STAGE_DECODE].is_empty = true;
+                } else {
+                    pipeline[STAGE_DECODE].stall = true;
+                }
+            } else {
+                pipeline[STAGE_DECODE].stall = true;
             }
         }
 
-        if (!pipeline[STAGE_FETCH].is_empty && pipeline[STAGE_DECODE].is_empty) {
-            Instruction res = fetch(pipeline[STAGE_FETCH]);
-            if (!res.stall) {
-                pipeline[STAGE_DECODE] = res;
-                pipeline[STAGE_FETCH].is_empty = true;
+        if (!pipeline[STAGE_FETCH].is_empty) { 
+            pipeline[STAGE_FETCH].stall = false;
+            if (pipeline[STAGE_DECODE].is_empty) {
+                Instruction res = fetch(pipeline[STAGE_FETCH]);
+                if (!res.hazard) {
+                    pipeline[STAGE_DECODE] = res;
+                    pipeline[STAGE_FETCH].is_empty = true;
+                } else {
+                    pipeline[STAGE_FETCH].stall = true;
+                }
+            } else {
+                pipeline[STAGE_FETCH].stall = true;
             }
         }
 
@@ -169,13 +203,14 @@ public:
     
             return new_inst;
         } else {
-            inst.stall = true;
+            cout << "fetch for instruction " << inst.addr << " missed cache, waiting for RAM" << endl;
+            inst.hazard = true;
             return inst;
         }
     }    
 
     Instruction decode(Instruction inst) {
-        if (inst.stall || inst.is_empty) return inst;
+        if (inst.is_empty) return inst;
         if (inst.binary == -1) {
             pipeline_halted = true;
             Instruction halt_inst;
@@ -222,9 +257,10 @@ public:
         // search for instructions in pipe targeting the operands
         for (int i = STAGE_EXECUTE; i <= STAGE_WRITEBACK; i++) {
             if (!pipeline[i].is_empty && pipeline[i].has_writeback && (pipeline[i].target == res.op1 || pipeline[i].target == res.op2)) {
-                // cout << "instruction " << res.addr << " has dependency on instruction " << pipeline[i].addr << endl;
+                cout << "instruction " << res.addr << "(" << getOperationName(res.opcode) << ")";
+                cout << " has dependency on instruction " << pipeline[i].addr <<"(" << getOperationName(pipeline[i].opcode) << ")" << endl;
                 // dependency is in the pipe, so we need to stall
-                res.stall = true;
+                res.hazard = true;
                 res.is_empty = false;
                 return res;
             }
@@ -238,7 +274,7 @@ public:
     }
 
     Instruction execute(Instruction inst) {
-        if (inst.stall || inst.is_empty) return inst;
+        if (inst.is_empty) return inst;
         int res = 0;
 
         switch (inst.opcode) {
@@ -258,7 +294,7 @@ public:
     }
 
     Instruction memory(Instruction inst) {
-        if (inst.stall || inst.is_empty || inst.type != TYPE_MEMORY) return inst;
+        if (inst.is_empty || inst.type != TYPE_MEMORY) return inst;
 
         if (inst.opcode == 0) {
             MemoryResult res = memory_system.read(inst.result, STAGE_MEMORY);
@@ -266,13 +302,15 @@ public:
                 inst.writeback_val = res.value;
                 return inst;
             } else {
-                inst.stall = true;
+                cout << "memory for instruction " << inst.addr << "(" << getOperationName(inst.opcode) << ")";
+                cout << " missed cache, waiting for RAM" << endl;
+                inst.hazard = true;
                 return inst;
             }
         } else {
             MemoryResult res = memory_system.write(inst.result, inst.op1, STAGE_MEMORY);
             if (res.status == STATUS_DONE) return inst;
-            inst.stall = true;
+            inst.hazard = true;
             return inst;
         }
     }
@@ -285,10 +323,10 @@ public:
     }
 
     void displayPipeline() {
-        cout << "Cycle: " << cycle_count << " | ";
+        cout << "Cycle: " << cycle_count << endl << " | ";
         for (int i = 0; i < 5; i++)
             cout << getStageDisplay(pipeline[i], i) << " | ";
-        cout << endl;
+        cout << endl << endl;
     }
 
     void viewRegisters() {
