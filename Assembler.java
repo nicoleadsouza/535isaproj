@@ -1,4 +1,10 @@
+import java.io.FileReader;
 import java.util.HashMap;
+import java.util.StringTokenizer;
+import java.util.Vector;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 
 class Mnemonic {
     public int opcode;
@@ -10,23 +16,28 @@ class Mnemonic {
 }
 
 public class Assembler {
-    // TODO: implement pseudo ops
+    // TODO: implement pseudo ops?
+    // TODO: improve error handling
 
     // private methods to create instructions for each type
-    private int getTypeAInst(int opcode, int r0, int r1, int r2, int imm) {
+    private static int getTypeAInst(int opcode, int r0, int r1, int r2, int imm) {
         return opcode << 27 | r0 << 23 | r1 << 19 | r2 << 15 | imm;
     }
 
-    private int getTypeBInst(int opcode, int r0, int r1, int imm) {
+    private static int getTypeBInst(int opcode, int r0, int r1, int imm) {
         return opcode << 27 | r0 << 23 | r1 << 19 | imm;
     }
 
-    private int getTypeCInst(int opcode, int r0, int r1, int cond, int imm) {
+    private static int getTypeCInst(int opcode, int r0, int r1, int cond, int imm) {
         return opcode << 27 | r0 << 23 | r1 << 19 | cond << 17 | imm;
     }
 
-    private int getTypeDInst(int opcode, int r0, int imm) {
+    private static int getTypeDInst(int opcode, int r0, int imm) {
         return opcode << 27 | r0 << 23 | imm;
+    }
+
+    private static int getOperand(String token, HashMap<String, Integer> symbolTable) {
+        return symbolTable.containsKey(token) ? symbolTable.get(token) : Integer.parseInt(token, 16);
     }
 
     // method to populate the mnemonic table
@@ -61,12 +72,132 @@ public class Assembler {
         return table;
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         HashMap<String, Mnemonic> mnemonicTable = initMnemonicTable();
+        HashMap<String, Integer> symbolTable = new HashMap<String, Integer>();
+        HashMap<Integer, String> reverseSymbolTable = new HashMap<Integer, String>(); // TODO: add this to output
+        String inputFileName, outputFileName;
+        String inputLine;
+        
 
+        if (args.length < 1 || args.length > 2) {
+            throw new Exception("Invalid arguments.");
+        }
+
+        inputFileName = args[0];
+        if (args.length == 2) {
+            outputFileName = args[1];
+        } else {
+            outputFileName = "output.txt"; // TODO: decide on default filename
+        }
+
+        // add register names to symbol table
+        for (int i = 0; i < 16; i++) {
+            symbolTable.put("R" + i, i);
+        }
+
+        int curLocation = 0;
+
+        BufferedReader reader = new BufferedReader(new FileReader(inputFileName));
         // first pass, generate symbol table
+        while ((inputLine = reader.readLine()) != null) {
+            StringTokenizer line = new StringTokenizer(inputLine, " ");
+            Vector<String> tokens= new Vector<String>();
+            int numTokens = line.countTokens();
+
+            for (int tokenNumber = 0; tokenNumber < numTokens; tokenNumber++ ) {
+                tokens.addElement(line.nextToken());
+            }
+
+            // # indicates comment, so ignore lines beginning with it
+            if (tokens.size() < 1 || tokens.elementAt(0).equals("#")) continue;
+
+            if (!mnemonicTable.containsKey(tokens.elementAt(0))) {
+                System.out.println("Found symbol declaration: " + tokens.elementAt(0));
+                System.out.println("Current location: " + curLocation);
+
+                // if not already in symbol table, add it
+                if (!symbolTable.containsKey(tokens.elementAt(0))) {
+                    symbolTable.put(tokens.elementAt(0), curLocation);
+                    reverseSymbolTable.put(curLocation, tokens.elementAt(0));
+                }
+                tokens.remove(0);
+            }
+
+            // for now, only considering instructions and not pseudo ops, so just increment location by one
+            curLocation++;
+        }
+
+        // reset for second pass
+        reader.close();
+        BufferedReader secondReader = new BufferedReader(new FileReader(inputFileName));
+        curLocation = 0;
+
+        // open output file
+        BufferedWriter writer = new BufferedWriter(new FileWriter(outputFileName));
 
         // second pass, generate instructions
+        while ((inputLine = secondReader.readLine()) != null) {
+            StringTokenizer line = new StringTokenizer(inputLine, " ");
+            Vector<String> tokens= new Vector<String>();
+            int numTokens = line.countTokens();
+
+            for (int tokenNumber = 0; tokenNumber < numTokens; tokenNumber++ ) {
+                tokens.addElement(line.nextToken());
+            }
+
+            // # indicates comment, so ignore lines beginning with it, or empty lines
+            if (tokens.size() < 1 || tokens.elementAt(0).equals("#")) continue;
+
+            if (!mnemonicTable.containsKey(tokens.elementAt(0))) {
+                tokens.remove(0);
+            }
+
+            Mnemonic inst = mnemonicTable.get(tokens.elementAt(0));
+            int opcode = inst.opcode;
+            int encodedInst, r0, r1, r2, cond, imm;
+            switch (inst.type) {
+                case InstType.TYPEA:
+                    r0 = getOperand(tokens.elementAt(1), symbolTable);
+                    r1 = getOperand(tokens.elementAt(2), symbolTable);
+                    r2 = getOperand(tokens.elementAt(3), symbolTable);
+                    imm = getOperand(tokens.elementAt(4), symbolTable);
+                    encodedInst = getTypeAInst(opcode, r0, r1, r2, imm);
+                    break;
+                case InstType.TYPEB:
+                    r0 = getOperand(tokens.elementAt(1), symbolTable);
+                    r1 = getOperand(tokens.elementAt(2), symbolTable);
+                    imm = getOperand(tokens.elementAt(3), symbolTable);
+                    encodedInst = getTypeBInst(opcode, r0, r1, imm);
+                    break;
+                case InstType.TYPEC:
+                    r0 = getOperand(tokens.elementAt(1), symbolTable);
+                    r1 = getOperand(tokens.elementAt(2), symbolTable);
+                    cond = getOperand(tokens.elementAt(3), symbolTable);
+                    imm = getOperand(tokens.elementAt(4), symbolTable);
+                    encodedInst = getTypeCInst(opcode, r0, r1, cond, imm);
+                    break;
+                case InstType.TYPED:
+                    r0 = getOperand(tokens.elementAt(1), symbolTable);
+                    imm = getOperand(tokens.elementAt(2), symbolTable);
+                    encodedInst = getTypeDInst(opcode, r0, imm);
+                    break;
+                default:
+                    encodedInst = -1;
+            }
+
+            System.out.println("Instruction at " + curLocation + ": " + tokens);
+            System.out.println("Encoded: " + encodedInst);
+
+            // write to output
+            writer.write(encodedInst + "\n");
+
+            // for now, only considering instructions and not pseudo ops, so just increment location by one
+            curLocation++;
+        }
+
+        secondReader.close();
+        writer.close();
 
         // write to file
     }
