@@ -27,3 +27,21 @@ This is a partial simulator that lets you load a sample set of instructions and 
 * ```b2b_writeread```: STR → LOAD → HALT (Goal: Memory write + memory read back-to-back.)
 * ```condbranchequal.txt```: BRN (if equal) → ADD (conditional) → HALT (Goal: Verify control flow and branch flushing.)
 * ```loadarrstore.txt```: LOAD → ADD → STR → HALT (Goal: Load → arithmetic → store (with proper data forwarding and stalling)
+
+## Writing Assembly ##
+
+* for mnemonics and operation syntax, refer to specification document
+
+* to refer to a register, you can use R0...R15 or directly enter an integer (not recommended)
+* integers will be parsed as base 16 and should NOT be prefixed with "0x"
+* eg. to indicate the number 16, write "10" and NOT "16" or "0x10"
+
+* lines proceeded by # will be ignored by the assembler
+* anything after the expected operands will also be ignored
+* for legibility it is recommended to separate any inline comments from the operation in some way
+* whitespace is meaningless
+
+* define a symbol by writing it at THE BEGINNING of the SAME LINE as the next mnemonic
+* symbols refer to the location in memory they refer to, which is usually the line number
+
+output.txt contains an example of assembly
