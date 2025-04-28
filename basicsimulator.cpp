@@ -268,6 +268,7 @@ public:
                 if (res.opcode == 1) res.op3 = res.r0; // STR has a third operand
                 res.target = res.r0;
                 res.immediate = inst.binary & 0x00007FFF;
+                if (res.immediate < 0) res.immediate = res.immediate | 0xFFFF8000; // sign extend if necessary
                 res.has_writeback = opcode != 1; // STR has no writeback value
                 break;
             case 'B':
@@ -275,6 +276,7 @@ public:
                 res.r0 = (inst.binary & 0x07800000) >> 23;
                 res.r1 = (inst.binary & 0x00780000) >> 19;
                 res.immediate = inst.binary & 0x0007FFFF;
+                if (res.immediate < 0) res.immediate = res.immediate | 0xFFF80000; // sign extend if necessary
                 res.type = TYPE_ALU;
                 res.op1 = res.r1;
                 res.target = res.r0;
@@ -286,6 +288,7 @@ public:
                 res.r1 = (inst.binary & 0x00780000) >> 19;
                 res.cond = (inst.binary & 0x00060000) >> 17;
                 res.immediate = inst.binary & 0x0001FFFF;
+                if (res.immediate < 0) res.immediate = res.immediate | 0xFFF60000; // sign extend if necessary
                 res.type = opcode == 20 ? TYPE_CONTROL : TYPE_ALU;
                 res.op1 = res.r0;
                 res.op2 = res.r1;
@@ -296,6 +299,7 @@ public:
                 // despite the name, LOADI is an ALU operation as it does not access memory, only registers
                 res.r0 = (inst.binary & 0x07800000) >> 23;
                 res.immediate = inst.binary & 0x007FFFFF;
+                if (res.immediate < 0) res.immediate = res.immediate | 0xFF800000; // sign extend if necessary
                 if (opcode == 3) {
                     res.target = res.r0;
                     res.op1 = res.immediate;
@@ -345,7 +349,7 @@ public:
                 break;
             case 20:
                 if (evaluateCond(inst.cond, inst.op1, inst.op2)) {
-                    program_counter = inst.addr + inst.immediate;
+                    program_counter = inst.immediate;
                     pipeline = vector<Instruction>(5); // TODO: squash pipe properly
                 }
                 break;
