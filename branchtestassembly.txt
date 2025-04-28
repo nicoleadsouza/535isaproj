@@ -1,0 +1,11 @@
+# test code to make sure branches work
+
+LOADI R0 0      # counter
+LOADI R1 5      # limit
+loopstart LOADI R2 1
+ADD R0 R0 R2 0
+BRN R0 R1 0 3   # if R0 = R1, branch to the end
+LOADI R3 loopstart
+JUMP R3 0       # otherwise, go back to the top of the loop
+LOADI R4 0
+STR R0 R4 R4 0

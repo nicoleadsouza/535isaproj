@@ -254,69 +254,55 @@ public:
         res.addr = inst.addr;
         int opcode = (inst.binary & 0xF8000000) >> 27;
         char inst_type = getInstType(opcode);
+        res.opcode = opcode;
 
         switch (inst_type) {
             case 'A':
                 // either 0 (LOAD), 1 (STR), or ALU
-                int r0 = (inst.binary & 0x07800000) >> 23;
-                int r1 = (inst.binary & 0x00780000) >> 19;
-                int r2 = (inst.binary & 0x00078000) >> 15;
-                int imm = inst.binary & 0x00007FFF;
                 res.type = (opcode == 0 || opcode == 1) ? TYPE_MEMORY : TYPE_ALU;
-                res.opcode = opcode;
-                res.r0 = r0;
-                res.r1 = r1;
-                res.r2 = r2;
-                res.op1 = r1;
-                res.op2 = r2;
-                if (res.opcode == 1) res.op3 = r0; // STR has a third operand
-                res.target = r0;
-                res.immediate = imm;
+                res.r0 = (inst.binary & 0x07800000) >> 23;
+                res.r1 = (inst.binary & 0x00780000) >> 19;
+                res.r2 = (inst.binary & 0x00078000) >> 15;
+                res.op1 = res.r1;
+                res.op2 = res.r2;
+                if (res.opcode == 1) res.op3 = res.r0; // STR has a third operand
+                res.target = res.r0;
+                res.immediate = inst.binary & 0x00007FFF;
                 res.has_writeback = opcode != 1; // STR has no writeback value
                 break;
             case 'B':
                 // all ALU operations
-                int r0 = (inst.binary & 0x07800000) >> 23;
-                int r1 = (inst.binary & 0x00780000) >> 19;
-                int imm = inst.binary & 0x0007FFFF;
+                res.r0 = (inst.binary & 0x07800000) >> 23;
+                res.r1 = (inst.binary & 0x00780000) >> 19;
+                res.immediate = inst.binary & 0x0007FFFF;
                 res.type = TYPE_ALU;
-                res.opcode = opcode;
-                res.r0 = r0;
-                res.r1 = r1;
-                res.op1 = r1;
-                res.immediate = imm;
-                res.target = r0;
+                res.op1 = res.r1;
+                res.target = res.r0;
                 res.has_writeback = true;
                 break;
             case 'C':
                 // either 20 (BRN) or 15 (SHF)
-                int r0 = (inst.binary & 0x07800000) >> 23;
-                int r1 = (inst.binary & 0x00780000) >> 19;
-                int cond = (inst.binary & 0x00060000) >> 17;
-                int imm = inst.binary & 0x0001FFFF;
+                res.r0 = (inst.binary & 0x07800000) >> 23;
+                res.r1 = (inst.binary & 0x00780000) >> 19;
+                res.cond = (inst.binary & 0x00060000) >> 17;
+                res.immediate = inst.binary & 0x0001FFFF;
                 res.type = opcode == 20 ? TYPE_CONTROL : TYPE_ALU;
-                res.opcode = opcode;
-                res.r0 = r0;
-                res.r1 = r1;
-                res.op1 = r0;
-                res.op2 = r1;
-                res.cond = cond;
-                res.immediate = imm;
+                res.op1 = res.r0;
+                res.op2 = res.r1;
                 res.has_writeback = opcode == 15; // SHF has a rightback value, but BRN does not
                 break;
             case 'D':
                 // either 3 (LOADI) or control
                 // despite the name, LOADI is an ALU operation as it does not access memory, only registers
-                int r0 = (inst.binary & 0x07800000) >> 23;
-                int imm = inst.binary & 0x007FFFFF;
-                res.r0 = r0;
-                res.immediate = imm;
+                res.r0 = (inst.binary & 0x07800000) >> 23;
+                res.immediate = inst.binary & 0x007FFFFF;
                 if (opcode == 3) {
-                    res.target = r0;
+                    res.target = res.r0;
+                    res.op1 = res.immediate;
                     res.type = TYPE_ALU;
                     res.has_writeback = true;
                 } else {
-                    res.op1 = r0;
+                    res.op1 = res.r0;
                     res.type = TYPE_CONTROL;
                 }
                 break;
@@ -359,7 +345,7 @@ public:
                 break;
             case 20:
                 if (evaluateCond(inst.cond, inst.op1, inst.op2)) {
-                    program_counter += inst.immediate;
+                    program_counter = inst.addr + inst.immediate;
                     pipeline = vector<Instruction>(5); // TODO: squash pipe properly
                 }
                 break;
@@ -397,7 +383,7 @@ public:
         }
     }
 
-    int writeback(Instruction inst) {
+    int writeback(Instruction inst) { // why does this have a return value, it's always FLAG_RUNNING...
         if (inst.is_empty) return FLAG_RUNNING;
         if (inst.type == TYPE_ALU) inst.writeback_val = inst.result;
         if (inst.has_writeback) registers[inst.r0] = inst.writeback_val;
