@@ -48,6 +48,35 @@ private:
     bool pipeline_halted = false;
     vector<Instruction> pipeline = vector<Instruction>(5);
 
+    char getInstType(int opcode) {
+        switch (opcode) { // uses fallthrough intentionally
+            case 0:
+            case 1:
+            case 2:
+            case 5:
+            case 7:
+            case 9:
+            case 11:
+            case 13:
+            case 16:
+            case 17:
+            case 18:
+            case 19: return 'A';
+            case 6:
+            case 8:
+            case 10:
+            case 12:
+            case 14: return 'B';
+            case 15:
+            case 20: return 'C';
+            case 3:
+            case 4:
+            case 21:
+            case 22: return 'D';
+            default: return 'X'; // unrecognized instruction, treat as NOP
+        }
+    }
+
     bool evaluateCond(int cond, int op1, int op2) {
         switch (cond) {
             case 0: return op1 == op2;
@@ -70,9 +99,12 @@ private:
         switch (opcode) {
             case 0: return "LOAD";
             case 1: return "STR";
+            case 3: return "LOADI";
             case 5: return "ADD";
             case 7: return "SUB";
+            case 9: return "MUL";
             case 20: return "BRN";
+            case 21: return "JUMP";
             default: return "NOP";
         }
     }
@@ -221,37 +253,73 @@ public:
         Instruction res;
         res.addr = inst.addr;
         int opcode = (inst.binary & 0xF8000000) >> 27;
+        char inst_type = getInstType(opcode);
 
-        if (opcode == 20) {
-            int r0 = (inst.binary & 0x07800000) >> 23;
-            int r1 = (inst.binary & 0x00780000) >> 19;
-            int cond = (inst.binary & 0x00060000) >> 17;
-            int imm = inst.binary & 0x0001FFFF;
-            res.type = TYPE_CONTROL;
-            res.opcode = opcode;
-            res.r0 = r0;
-            res.r1 = r1;
-            res.op1 = r0;
-            res.op2 = r1;
-            res.cond = cond;
-            res.immediate = imm;
-            res.has_writeback = false;
-        } else {
-            int r0 = (inst.binary & 0x07800000) >> 23;
-            int r1 = (inst.binary & 0x00780000) >> 19;
-            int r2 = (inst.binary & 0x00078000) >> 15;
-            int imm = inst.binary & 0x00007FFF;
-            res.type = (opcode == 0 || opcode == 1) ? TYPE_MEMORY : TYPE_ALU;
-            res.opcode = opcode;
-            res.r0 = r0;
-            res.r1 = r1;
-            res.r2 = r2;
-            res.op1 = r1;
-            if (res.opcode == 1) res.op3 = r0;
-            res.op2 = r2;
-            res.target = r0;
-            res.immediate = imm;
-            res.has_writeback = opcode != 1;
+        switch (inst_type) {
+            case 'A':
+                // either 0 (LOAD), 1 (STR), or ALU
+                int r0 = (inst.binary & 0x07800000) >> 23;
+                int r1 = (inst.binary & 0x00780000) >> 19;
+                int r2 = (inst.binary & 0x00078000) >> 15;
+                int imm = inst.binary & 0x00007FFF;
+                res.type = (opcode == 0 || opcode == 1) ? TYPE_MEMORY : TYPE_ALU;
+                res.opcode = opcode;
+                res.r0 = r0;
+                res.r1 = r1;
+                res.r2 = r2;
+                res.op1 = r1;
+                res.op2 = r2;
+                if (res.opcode == 1) res.op3 = r0; // STR has a third operand
+                res.target = r0;
+                res.immediate = imm;
+                res.has_writeback = opcode != 1; // STR has no writeback value
+                break;
+            case 'B':
+                // all ALU operations
+                int r0 = (inst.binary & 0x07800000) >> 23;
+                int r1 = (inst.binary & 0x00780000) >> 19;
+                int imm = inst.binary & 0x0007FFFF;
+                res.type = TYPE_ALU;
+                res.opcode = opcode;
+                res.r0 = r0;
+                res.r1 = r1;
+                res.op1 = r1;
+                res.immediate = imm;
+                res.target = r0;
+                res.has_writeback = true;
+                break;
+            case 'C':
+                // either 20 (BRN) or 15 (SHF)
+                int r0 = (inst.binary & 0x07800000) >> 23;
+                int r1 = (inst.binary & 0x00780000) >> 19;
+                int cond = (inst.binary & 0x00060000) >> 17;
+                int imm = inst.binary & 0x0001FFFF;
+                res.type = opcode == 20 ? TYPE_CONTROL : TYPE_ALU;
+                res.opcode = opcode;
+                res.r0 = r0;
+                res.r1 = r1;
+                res.op1 = r0;
+                res.op2 = r1;
+                res.cond = cond;
+                res.immediate = imm;
+                res.has_writeback = opcode == 15; // SHF has a rightback value, but BRN does not
+                break;
+            case 'D':
+                // either 3 (LOADI) or control
+                // despite the name, LOADI is an ALU operation as it does not access memory, only registers
+                int r0 = (inst.binary & 0x07800000) >> 23;
+                int imm = inst.binary & 0x007FFFFF;
+                res.r0 = r0;
+                res.immediate = imm;
+                if (opcode == 3) {
+                    res.target = r0;
+                    res.type = TYPE_ALU;
+                    res.has_writeback = true;
+                } else {
+                    res.op1 = r0;
+                    res.type = TYPE_CONTROL;
+                }
+                break;
         }
 
         // handle dependencies
@@ -267,8 +335,8 @@ public:
             }
         }
         // no dependencies in pipe, fetch operands
-        res.op1 = registers[res.op1];
-        res.op2 = registers[res.op2];
+        if (opcode != 3) res.op1 = registers[res.op1]; // LOADI has only an immediate operand
+        if (inst_type == 'A' || inst_type == 'C') res.op2 = registers[res.op2];
         if (res.op3 != -1) res.op3 = registers[res.op3];
 
         res.is_empty = false;
@@ -281,13 +349,23 @@ public:
 
         switch (inst.opcode) {
             case 0: case 1: res = inst.op1 + inst.immediate; break;
+            case 3: //loadi
+                res = inst.op1; // c++ should automatically sign extend the value, so no need to compute that
+                break;
             case 5: res = inst.op1 + inst.op2; break;
             case 7: res = inst.op1 - inst.op2; break;
+            case 9: //mul 
+                res = (inst.op1 * inst.op2) & 0xFFFFFFFF; // discard upper bits
+                break;
             case 20:
                 if (evaluateCond(inst.cond, inst.op1, inst.op2)) {
                     program_counter += inst.immediate;
-                    pipeline = vector<Instruction>(5);
+                    pipeline = vector<Instruction>(5); // TODO: squash pipe properly
                 }
+                break;
+            case 21: //jump
+                program_counter = inst.op1;
+                pipeline = vector<Instruction>(5); // TODO: squash pipe properly
                 break;
         }
 
