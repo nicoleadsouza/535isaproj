@@ -68,6 +68,7 @@ public class Assembler {
         table.put("BRN", new Mnemonic(0x14,InstType.TYPEC));
         table.put("JUMP", new Mnemonic(0x15,InstType.TYPED));
         table.put("SUBJ", new Mnemonic(0x16,InstType.TYPED));
+        table.put("HALT", new Mnemonic(0xFF,null)); // HALT is special instruction of all 1s
 
         return table;
     }
@@ -156,34 +157,38 @@ public class Assembler {
             Mnemonic inst = mnemonicTable.get(tokens.elementAt(0));
             int opcode = inst.opcode;
             int encodedInst, r0, r1, r2, cond, imm;
-            switch (inst.type) {
-                case InstType.TYPEA:
-                    r0 = getOperand(tokens.elementAt(1), symbolTable);
-                    r1 = getOperand(tokens.elementAt(2), symbolTable);
-                    r2 = getOperand(tokens.elementAt(3), symbolTable);
-                    imm = getOperand(tokens.elementAt(4), symbolTable);
-                    encodedInst = getTypeAInst(opcode, r0, r1, r2, imm);
-                    break;
-                case InstType.TYPEB:
-                    r0 = getOperand(tokens.elementAt(1), symbolTable);
-                    r1 = getOperand(tokens.elementAt(2), symbolTable);
-                    imm = getOperand(tokens.elementAt(3), symbolTable);
-                    encodedInst = getTypeBInst(opcode, r0, r1, imm);
-                    break;
-                case InstType.TYPEC:
-                    r0 = getOperand(tokens.elementAt(1), symbolTable);
-                    r1 = getOperand(tokens.elementAt(2), symbolTable);
-                    cond = getOperand(tokens.elementAt(3), symbolTable);
-                    imm = getOperand(tokens.elementAt(4), symbolTable);
-                    encodedInst = getTypeCInst(opcode, r0, r1, cond, imm);
-                    break;
-                case InstType.TYPED:
-                    r0 = getOperand(tokens.elementAt(1), symbolTable);
-                    imm = getOperand(tokens.elementAt(2), symbolTable);
-                    encodedInst = getTypeDInst(opcode, r0, imm);
-                    break;
-                default:
-                    encodedInst = -1;
+            if (inst.type == null) {
+                encodedInst = -1;
+            } else {
+                switch (inst.type) {
+                    case InstType.TYPEA:
+                        r0 = getOperand(tokens.elementAt(1), symbolTable);
+                        r1 = getOperand(tokens.elementAt(2), symbolTable);
+                        r2 = getOperand(tokens.elementAt(3), symbolTable);
+                        imm = getOperand(tokens.elementAt(4), symbolTable);
+                        encodedInst = getTypeAInst(opcode, r0, r1, r2, imm);
+                        break;
+                    case InstType.TYPEB:
+                        r0 = getOperand(tokens.elementAt(1), symbolTable);
+                        r1 = getOperand(tokens.elementAt(2), symbolTable);
+                        imm = getOperand(tokens.elementAt(3), symbolTable);
+                        encodedInst = getTypeBInst(opcode, r0, r1, imm);
+                        break;
+                    case InstType.TYPEC:
+                        r0 = getOperand(tokens.elementAt(1), symbolTable);
+                        r1 = getOperand(tokens.elementAt(2), symbolTable);
+                        cond = getOperand(tokens.elementAt(3), symbolTable);
+                        imm = getOperand(tokens.elementAt(4), symbolTable);
+                        encodedInst = getTypeCInst(opcode, r0, r1, cond, imm);
+                        break;
+                    case InstType.TYPED:
+                        r0 = getOperand(tokens.elementAt(1), symbolTable);
+                        imm = getOperand(tokens.elementAt(2), symbolTable);
+                        encodedInst = getTypeDInst(opcode, r0, imm);
+                        break;
+                    default:
+                        encodedInst = -1;
+                }
             }
 
             System.out.println("Instruction at " + curLocation + ": " + tokens);
