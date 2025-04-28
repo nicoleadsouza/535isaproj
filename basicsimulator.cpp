@@ -224,8 +224,8 @@ public:
             new_inst.binary = res.value;
             new_inst.addr = inst.addr;
     
-            if (res.value == 0) {
-                // treat binary 0 as HALT signal
+            if (res.value == -1) {
+                // treat -1 (invalid instruction) as HALT signal
                 pipeline_halted = true;
                 new_inst.is_empty = true;
             } else {
@@ -346,12 +346,18 @@ public:
             case 20:
                 if (evaluateCond(inst.cond, inst.op1, inst.op2)) {
                     program_counter = inst.addr + inst.immediate;
-                    pipeline = vector<Instruction>(5); // TODO: squash pipe properly
+                    // set all earlier stages to empty to squash pipe
+                    Instruction emptyInst;
+                    emptyInst.is_empty = true;
+                    pipeline[STAGE_FETCH] = pipeline[STAGE_DECODE] = pipeline[STAGE_EXECUTE] = emptyInst;
                 }
                 break;
             case 21: //jump
                 program_counter = inst.op1;
-                pipeline = vector<Instruction>(5); // TODO: squash pipe properly
+                // set all earlier stages to empty to squash pipe
+                Instruction emptyInst;
+                emptyInst.is_empty = true;
+                pipeline[STAGE_FETCH] = pipeline[STAGE_DECODE] = pipeline[STAGE_EXECUTE] = emptyInst;
                 break;
         }
 
@@ -391,7 +397,9 @@ public:
     }
 
     void displayPipeline() {
-        cout << "Cycle: " << cycle_count << endl << " | ";
+        cout << "Cycle: " << cycle_count;
+        if (pipeline_halted) cout << " [Halted] ";
+        cout << endl << " | ";
         for (int i = 0; i < 5; i++)
             cout << getStageDisplay(pipeline[i], i) << " | ";
         cout << endl << endl;
