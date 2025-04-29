@@ -87,7 +87,7 @@ private:
         }
     }
 
-    string getStageDisplay(Instruction inst, int stage) {
+    string getStageDisplay(Instruction inst, int stage) const {
         if (inst.is_empty) return "empty";
         if (inst.stall) return "stall";
         if (inst.hazard) return "hazard";
@@ -95,7 +95,7 @@ private:
         return getOperationName(inst.opcode);
     }
 
-    string getOperationName(int opcode) {
+    string getOperationName(int opcode) const {
         switch (opcode) {
             case 0: return "LOAD";
             case 1: return "STR";
@@ -111,6 +111,13 @@ private:
 
 public:
     Simulator() : registers(NUM_REGISTERS, 0), program_counter(0) {}
+
+    // --- ADDED public getter methods for Qt UI ---
+    int getCycleCount() const { return cycle_count; }
+    int getProgramCounter() const { return program_counter; }
+    int viewRegister(int reg) const { return registers[reg]; }
+    string getStageDisplayText(int stage) const { return getStageDisplay(pipeline[stage], stage); }
+    // ------------------------------------------------
 
     void loadProgramFromFile(const string& filename) {
         ifstream infile(filename);
@@ -421,6 +428,10 @@ public:
 
 // simple command line UI, did not get around to using Qt or something more advanced 
 
+// commenting out this main so it does not interfere with Qt implementation
+
+/* 
+
 int main() {
     Simulator sim;
     string command;
@@ -469,3 +480,5 @@ int main() {
 
     return 0;
 }
+
+*/
