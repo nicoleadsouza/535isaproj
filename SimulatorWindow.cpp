@@ -12,7 +12,7 @@ SimulatorWindow::SimulatorWindow(QWidget *parent)
 
     QPushButton* loadButton = new QPushButton("Load Program");
     QPushButton* runButton = new QPushButton("Run Cycles");
-    QPushButton* runToEndButton = new QPushButton("Run to End"); // optional extra
+    QPushButton* runToEndButton = new QPushButton("Run to End");
     QPushButton* stepButton = new QPushButton("Step");
     QPushButton* viewRegButton = new QPushButton("View Registers");
     QPushButton* viewMemButton = new QPushButton("View Memory");
@@ -23,8 +23,9 @@ SimulatorWindow::SimulatorWindow(QWidget *parent)
 
     memLevelInput = new QLineEdit();
     memLevelInput->setPlaceholderText("Level (0=RAM,1=Cache)");
+
     memLineInput = new QLineEdit();
-    memLineInput->setPlaceholderText("Line Number");
+    memLineInput->setPlaceholderText("Start Line");
 
     cycleLabel = new QLabel("Cycles: 0");
     pcLabel = new QLabel("PC: 0");
@@ -32,7 +33,7 @@ SimulatorWindow::SimulatorWindow(QWidget *parent)
     registerDisplay = new QTextEdit();
     registerDisplay->setReadOnly(true);
 
-    memoryDisplay = new QTextEdit(); // new
+    memoryDisplay = new QTextEdit();
     memoryDisplay->setReadOnly(true);
 
     QVBoxLayout* layout = new QVBoxLayout();
@@ -49,13 +50,14 @@ SimulatorWindow::SimulatorWindow(QWidget *parent)
     layout->addWidget(cycleLabel);
     layout->addWidget(pcLabel);
 
+    const QString stageNames[5] = { "Fetch", "Decode", "Execute", "Memory", "Writeback" };
     for (int i = 0; i < 5; ++i) {
-        pipelineLabels[i] = new QLabel("Stage " + QString::number(i) + ": empty");
+        pipelineLabels[i] = new QLabel(stageNames[i] + ": empty");
         layout->addWidget(pipelineLabels[i]);
     }
 
     layout->addWidget(registerDisplay);
-    layout->addWidget(memoryDisplay); // show live memory + cache here
+    layout->addWidget(memoryDisplay);
 
     connect(loadButton, &QPushButton::clicked, this, &SimulatorWindow::loadProgram);
     connect(runButton, &QPushButton::clicked, this, &SimulatorWindow::runCycles);
@@ -92,7 +94,7 @@ void SimulatorWindow::stepCycle() {
 
 void SimulatorWindow::runToCompletion() {
     while (simulator.step() == FLAG_RUNNING) {
-        // optionally: QCoreApplication::processEvents();
+        // Optional: process UI events
     }
     updatePipelineDisplay();
 }
@@ -105,7 +107,6 @@ void SimulatorWindow::viewRegisters() {
     registerDisplay->setText(text);
 }
 
-// updated to show about 10 lines (not in real time, but when actually clicking the view memory button)
 void SimulatorWindow::viewMemory() {
     int level = memLevelInput->text().toInt();
     int startLine = memLineInput->text().toInt();
@@ -137,12 +138,13 @@ void SimulatorWindow::updatePipelineDisplay() {
     cycleLabel->setText("Cycles: " + QString::number(simulator.getCycleCount()));
     pcLabel->setText("PC: " + QString::number(simulator.getProgramCounter()));
 
+    const QString stageNames[5] = { "Fetch", "Decode", "Execute", "Memory", "Writeback" };
     for (int i = 0; i < 5; ++i) {
-        pipelineLabels[i]->setText("Stage " + QString::number(i) + ": " +
+        pipelineLabels[i]->setText(stageNames[i] + ": " +
             QString::fromStdString(simulator.getStageDisplayText(i)));
     }
 
-    // 💡 New: Real-time memory + cache display
+    // Live view of lines 0–3
     QString memText = "CACHE (Lines 0–3):\n";
     for (int i = 0; i < 4; ++i) {
         std::ostringstream out;
