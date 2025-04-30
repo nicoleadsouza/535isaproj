@@ -1,0 +1,75 @@
+# Matrix multiplication
+# Multiplies two matrices and stores the result in a third
+# input:
+# [1, 1, 1, 1] [1, 1, 1, 1]
+# [1, 1, 1, 1] [1, 1, 1, 1]
+# [1, 1, 1, 1] [1, 1, 1, 1]
+# [1, 1, 1, 1] [1, 1, 1, 1]
+# output:
+# [4, 4, 4, 4]
+# [4, 4, 4, 4]
+# [4, 4, 4, 4]
+# [4, 4, 4, 4]
+
+# constants
+LOADI R1 40         # address of matrix A
+LOADI R2 50         # address of matrix B (will need to be changed for bigger size)
+LOADI R3 60         # address of output matrix C (will need to be changed for bigger size)
+LOADI R4 4          # first dimension n of A
+LOADI R5 4          # second dimension m of A (and first of B)
+LOADI R6 4          # second dimention p of B
+
+# fill matrix A with data
+LOADI R7 1          # data is just all 1s for now
+LOADI R8 0          # outer loop counter
+    aouterstart LOADI R9 0       # inner loop counter
+        # calculate offset in matrix
+        # A[x][y] = A + x * n + y
+            ainnerstart MUL R10 R8 R4 0
+            ADD R10 R8 R9 0
+            STR R7 R1 R10 0         # store the data
+            ADD R9 R9 R7 0          # R9 = R9 + 1
+            BRN R9 R5 1 ainnerstart  # if R9 < R5 goto ainnerstart
+        ADD R8 R8 R7 0          # R8 = R8 + 1
+        BRN R8 R4 1 aouterstart  # if R8 < R4 goto aouterstart
+
+# fill matrix B with data
+LOADI R8 0          # outer loop counter
+    bouterstart LOADI R9 0       # inner loop counter
+            # calculate offset in matrix
+            binnerstart MUL R10 R8 R5 0
+            ADD R10 R8 R9 0
+            STR R7 R2 R10 0         # store the data
+            ADD R9 R9 R7 0          # R9 = R9 + 1
+            BRN R9 R6 1 binnerstart  # if R9 < R6 goto binnerstart
+        ADD R8 R8 R7 0          # R8 = R8 + 1
+        BRN R8 R5 1 bouterstart  # if R8 < R5 goto bouterstart
+
+# matrix multiplication algorithm
+LOADI R8 0          # first loop counter
+    firstloop LOADI R9 0       # second loop counter
+            secondloop LOADI R10 0     # sum
+            LOADI R11 0                 # third loop counter
+                # calculate indices
+                # A[i][k] = A + i * n + k
+                thirdloop MUL R12 R8 R4 0
+                ADD R12 R12 R11
+                LOAD R12 R1 R12 0       # R12 = A[R12]
+                # B[k][j] = B + k * m + j
+                MUL R13 R11 R5 0
+                ADD R13 R13 R9
+                LOAD R13 R2 R13 0       # R13 = B[R13]
+                MUL R14 R12 R13 0       # R14 = R12 * R13
+                ADD R10 R10 R14 0       # R10 = R10 + R14
+                ADD R11 R11 R7 0        # R11 = R11 + 1
+                BRN R11 R5 1 thirdloop  # if R11 < R5 goto thirdloop
+            # calculate index again
+            # C[i][j] = C + i * n + j
+            MUL R11 R8 R4 0
+            ADD R11 R8 R9 0
+            STR R10 R3 R11 0        # C[i][j] = R10 (sum)
+            ADD R9 R9 R7 0          # R9 = R9 + 1
+            BRN R9 R6 1 secondloop  # if R9 < R6 goto secondloop
+        ADD R8 R8 R7 0          # R8 = R8 + 1
+        BRN R8 R5 1 firstloop  # if R8 < R5 goto firstloop
+HALT
