@@ -2,6 +2,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFileDialog>
+#include <sstream>
 
 SimulatorWindow::SimulatorWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -11,6 +12,7 @@ SimulatorWindow::SimulatorWindow(QWidget *parent)
 
     QPushButton* loadButton = new QPushButton("Load Program");
     QPushButton* runButton = new QPushButton("Run Cycles");
+    QPushButton* runToEndButton = new QPushButton("Run to End"); // optional extra
     QPushButton* stepButton = new QPushButton("Step");
     QPushButton* viewRegButton = new QPushButton("View Registers");
     QPushButton* viewMemButton = new QPushButton("View Memory");
@@ -26,12 +28,17 @@ SimulatorWindow::SimulatorWindow(QWidget *parent)
 
     cycleLabel = new QLabel("Cycles: 0");
     pcLabel = new QLabel("PC: 0");
+
     registerDisplay = new QTextEdit();
     registerDisplay->setReadOnly(true);
+
+    memoryDisplay = new QTextEdit(); // new
+    memoryDisplay->setReadOnly(true);
 
     QVBoxLayout* layout = new QVBoxLayout();
     layout->addWidget(loadButton);
     layout->addWidget(runButton);
+    layout->addWidget(runToEndButton);
     layout->addWidget(stepButton);
     layout->addWidget(viewRegButton);
     layout->addWidget(viewMemButton);
@@ -48,9 +55,11 @@ SimulatorWindow::SimulatorWindow(QWidget *parent)
     }
 
     layout->addWidget(registerDisplay);
+    layout->addWidget(memoryDisplay); // show live memory + cache here
 
     connect(loadButton, &QPushButton::clicked, this, &SimulatorWindow::loadProgram);
     connect(runButton, &QPushButton::clicked, this, &SimulatorWindow::runCycles);
+    connect(runToEndButton, &QPushButton::clicked, this, &SimulatorWindow::runToCompletion);
     connect(stepButton, &QPushButton::clicked, this, &SimulatorWindow::stepCycle);
     connect(viewRegButton, &QPushButton::clicked, this, &SimulatorWindow::viewRegisters);
     connect(viewMemButton, &QPushButton::clicked, this, &SimulatorWindow::viewMemory);
@@ -81,6 +90,13 @@ void SimulatorWindow::stepCycle() {
     updatePipelineDisplay();
 }
 
+void SimulatorWindow::runToCompletion() {
+    while (simulator.step() == FLAG_RUNNING) {
+        // optionally: QCoreApplication::processEvents();
+    }
+    updatePipelineDisplay();
+}
+
 void SimulatorWindow::viewRegisters() {
     QString text;
     for (int i = 0; i < NUM_REGISTERS; ++i) {
@@ -92,13 +108,14 @@ void SimulatorWindow::viewRegisters() {
 void SimulatorWindow::viewMemory() {
     int level = memLevelInput->text().toInt();
     int line = memLineInput->text().toInt();
-    simulator.viewMemory(level, line);
+    simulator.viewMemory(level, line); // still uses console
 }
 
 void SimulatorWindow::resetSimulator() {
     simulator = Simulator();
     updatePipelineDisplay();
     registerDisplay->clear();
+    memoryDisplay->clear();
 }
 
 void SimulatorWindow::updatePipelineDisplay() {
@@ -107,6 +124,27 @@ void SimulatorWindow::updatePipelineDisplay() {
 
     for (int i = 0; i < 5; ++i) {
         pipelineLabels[i]->setText("Stage " + QString::number(i) + ": " +
-                                   QString::fromStdString(simulator.getStageDisplayText(i)));
+            QString::fromStdString(simulator.getStageDisplayText(i)));
     }
+
+    // 💡 New: Real-time memory + cache display
+    QString memText = "CACHE (Lines 0–3):\n";
+    for (int i = 0; i < 4; ++i) {
+        std::ostringstream out;
+        std::streambuf* old = std::cout.rdbuf(out.rdbuf());
+        simulator.viewMemory(1, i);
+        std::cout.rdbuf(old);
+        memText += QString::fromStdString(out.str());
+    }
+
+    memText += "\nRAM (Lines 0–3):\n";
+    for (int i = 0; i < 4; ++i) {
+        std::ostringstream out;
+        std::streambuf* old = std::cout.rdbuf(out.rdbuf());
+        simulator.viewMemory(0, i);
+        std::cout.rdbuf(old);
+        memText += QString::fromStdString(out.str());
+    }
+
+    memoryDisplay->setPlainText(memText);
 }
