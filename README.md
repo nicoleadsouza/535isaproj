@@ -45,3 +45,10 @@ This is a partial simulator that lets you load a sample set of instructions and 
 * symbols refer to the location in memory they refer to, which is usually the line number
 
 output.txt contains an example of assembly
+
+
+## How to Run the UI ##
+
+1. Make sure this repo is cloned to machine, and support for Qt is installed.
+2. ```cd``` into this repo on your machine.
+3. Run ```qmake CacheFlowSim.pro```, ```make```, and then ```open CacheFlowSim.app```
