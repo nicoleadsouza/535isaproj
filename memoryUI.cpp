@@ -45,6 +45,7 @@ public:
         if (useCache && cache[line_index].valid && cache[line_index].tag == tag) {
             cache[line_index].data[offset] = value;
             cache[line_index].dirty = true;
+            if (memory_access_stage == stage) cycle_count = 0;
             return {STATUS_DONE, 0};
         } else {
             if (cycle_count == 0) {
@@ -65,13 +66,18 @@ public:
     }
 
     MemoryResult read(int address, int stage) {
+        cout << "Received read request from stage " << stage << ". Current stage: " << memory_access_stage << ". Cycle cout: " << cycle_count << endl;
+        cout << "Address: " << address << endl;
         int line_index = (address / WORDS_PER_LINE) % CACHE_LINES;
         int tag = address / (CACHE_LINES * WORDS_PER_LINE);
         int offset = address % WORDS_PER_LINE;
 
         if (useCache && cache[line_index].valid && cache[line_index].tag == tag) {
+            cout << "Cache hit!" << endl;
+            if (memory_access_stage == stage) cycle_count = 0;
             return {STATUS_DONE, cache[line_index].data[offset]};
         } else {
+            cout << "Cache miss!" << endl;
             if (cycle_count == 0) {
                 cycle_count = MEMORY_DELAY;
                 memory_access_stage = stage;

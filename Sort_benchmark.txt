@@ -14,7 +14,6 @@ BRN R4 R2 1 loop1                   # if R4 < R2 goto loop1
 
 # sort
 SUB R4 R2 R3 0                      # outer loop limit, R2 - 1
-SUB R5 R4 R3 0                      # inner loop limit, R5 - 1 (the same for every iteration)
 LOADI R6 0                          # outer loop counter
 outerstart ADD R7 R6 R3 0               # inner loop counter = R6 + 1
         innerstart LOAD R8 R1 R6 0                 # R8 = array[R6]
@@ -27,7 +26,7 @@ outerstart ADD R7 R6 R3 0               # inner loop counter = R6 + 1
 
         # increment counter
         innerend ADD R7 R7 R3 0         # R7 = R7 + 1
-        BRN R7 R5 2 outerend            # if R7 >= R5 goto outerend (ie. exit the loop)
+        BRN R7 R2 2 outerend            # if R7 >= R2 goto outerend (ie. exit the loop)
 
         # back to the top
         LOADI R15 innerstart
