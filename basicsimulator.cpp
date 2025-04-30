@@ -47,6 +47,8 @@ private:
     int cycle_count = 0;
     bool pipeline_halted = false;
     vector<Instruction> pipeline = vector<Instruction>(5);
+    bool use_pipeline;
+    bool keep_fetching = true;
 
     char getInstType(int opcode) {
         switch (opcode) { // uses fallthrough intentionally
@@ -110,7 +112,9 @@ private:
     }
 
 public:
-    Simulator() : registers(NUM_REGISTERS, 0), program_counter(0) {}
+    //Simulator() : registers(NUM_REGISTERS, 0), program_counter(0) {}
+    // optionally can specifify whether to use pipeline and cache
+    Simulator(bool pipe = true, bool cache = true) : registers(NUM_REGISTERS, 0), program_counter(0), use_pipeline(pipe), memory_system(cache) {}
 
     // --- ADDED public getter methods for Qt UI ---
     int getCycleCount() const { return cycle_count; }
@@ -141,6 +145,7 @@ public:
             if (writeback(pipeline[STAGE_WRITEBACK]) == FLAG_HALT)
                 return FLAG_HALT;
             pipeline[STAGE_WRITEBACK].is_empty = true;
+            keep_fetching = true;
         }
 
         if (!pipeline[STAGE_MEMORY].is_empty) {
@@ -203,11 +208,12 @@ public:
             }
         }
 
-        if (pipeline[STAGE_FETCH].is_empty && !pipeline_halted) {
+        if (pipeline[STAGE_FETCH].is_empty && !pipeline_halted && keep_fetching) {
             Instruction inst;
             inst.addr = program_counter;
             inst.is_empty = false;
             pipeline[STAGE_FETCH] = inst;
+            if (!use_pipeline) keep_fetching = false;
         }
 
         cycle_count++;
@@ -430,7 +436,6 @@ public:
 
 // commenting out this main so it does not interfere with Qt implementation
 
-/* 
 
 int main() {
     Simulator sim;
@@ -480,5 +485,3 @@ int main() {
 
     return 0;
 }
-
-*/
