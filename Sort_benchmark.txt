@@ -1,5 +1,5 @@
 # basic exchange sort
-# input: [4, 3, 2, 1, 0] -> output: [0, 1, 2, 3, 4]
+# input: [0, 1, 2, 3, 4] -> output: [4, 3, 2, 1, 0]
 
 # constants
 LOADI R1 40                         # location of array, memory address 64
@@ -10,7 +10,7 @@ LOADI R3 1                          # having a register with 1 in it is just use
 LOADI R4 0                          # counter
 loop1 STR R4 R1 R4 0                # array[R4] = R4
 ADD R4 R4 R3 0                      # R4 = R4 + 1
-BRN R4 R2 0 loop1                   # if R4 == R2 goto loop1
+BRN R4 R2 1 loop1                   # if R4 < R2 goto loop1
 
 # sort
 SUB R4 R2 R3 0                      # outer loop limit, R2 - 1
@@ -23,7 +23,7 @@ outerstart ADD R7 R6 R3 0               # inner loop counter = R6 + 1
 
         # swap
         STR R8 R1 R7 0                  # array[R7] = R8
-        STR R9 R1 R6 0                  # array[R6] = R8
+        STR R9 R1 R6 0                  # array[R6] = R9
 
         # increment counter
         innerend ADD R7 R7 R3 0         # R7 = R7 + 1
@@ -32,7 +32,7 @@ outerstart ADD R7 R6 R3 0               # inner loop counter = R6 + 1
         # back to the top
         LOADI R15 innerstart
         JUMP R15 0
-    #increment counter
+    # increment counter
     outerend ADD R6 R6 R3 0          # R6 = R6 + 1
     BRN R6 R4 2 end                  # if R6 >= R4 goto end
 
