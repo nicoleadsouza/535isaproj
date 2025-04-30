@@ -6,7 +6,8 @@
 #include <QLineEdit>
 #include <QLabel>
 #include <QTextEdit>
-#include "basicsimulator.cpp" // your existing simulator
+#include <QComboBox>
+#include "basicsimulator.cpp"
 
 class SimulatorWindow : public QMainWindow {
     Q_OBJECT
@@ -21,19 +22,20 @@ private slots:
     void viewRegisters();
     void viewMemory();
     void resetSimulator();
+    void runToCompletion();
 
 private:
-    Simulator simulator; // your existing Simulator class
+    Simulator simulator;
     QLabel* cycleLabel;
     QLabel* pcLabel;
     QLabel* pipelineLabels[5];
     QTextEdit* registerDisplay;
+    QTextEdit* memoryDisplay; // <-- new memory output widget
     QLineEdit* cycleInput;
     QLineEdit* memLevelInput;
     QLineEdit* memLineInput;
 
     void updatePipelineDisplay();
-    void updateRegisterDisplay();
 };
 
 #endif // SIMULATORWINDOW_H
