@@ -31,8 +31,10 @@ private:
     vector<CacheLine> cache;
     int cycle_count = 0;
     int memory_access_stage = -1;
+    bool useCache;
 
 public:
+    MemorySystem(bool cache) : ram(RAM_SIZE, 0), cache(CACHE_LINES), useCache(cache) {}
     MemorySystem() : ram(RAM_SIZE, 0), cache(CACHE_LINES) {}
 
     MemoryResult write(int address, int value, int stage) {
@@ -40,7 +42,7 @@ public:
         int tag = address / (CACHE_LINES * WORDS_PER_LINE);
         int offset = address % WORDS_PER_LINE;
 
-        if (cache[line_index].valid && cache[line_index].tag == tag) {
+        if (useCache && cache[line_index].valid && cache[line_index].tag == tag) {
             cache[line_index].data[offset] = value;
             cache[line_index].dirty = true;
             return {STATUS_DONE, 0};
@@ -67,7 +69,7 @@ public:
         int tag = address / (CACHE_LINES * WORDS_PER_LINE);
         int offset = address % WORDS_PER_LINE;
 
-        if (cache[line_index].valid && cache[line_index].tag == tag) {
+        if (useCache && cache[line_index].valid && cache[line_index].tag == tag) {
             return {STATUS_DONE, cache[line_index].data[offset]};
         } else {
             if (cycle_count == 0) {
@@ -77,19 +79,23 @@ public:
             } else if (memory_access_stage == stage) {
                 cycle_count--;
                 if (cycle_count == 0) {
-                    if (cache[line_index].dirty) {
-                        int oldaddr = (cache[line_index].tag * (CACHE_LINES * WORDS_PER_LINE)) + line_index;
-                        for (int i = 0; i < WORDS_PER_LINE; i++) {
-                            ram[(oldaddr / WORDS_PER_LINE) * WORDS_PER_LINE + i] = cache[line_index].data[i];
+                    if (useCache) {
+                        if (cache[line_index].dirty) {
+                            int oldaddr = (cache[line_index].tag * (CACHE_LINES * WORDS_PER_LINE)) + line_index;
+                            for (int i = 0; i < WORDS_PER_LINE; i++) {
+                                ram[(oldaddr / WORDS_PER_LINE) * WORDS_PER_LINE + i] = cache[line_index].data[i];
+                            }
                         }
+                        cache[line_index].valid = true;
+                        cache[line_index].tag = tag;
+                        cache[line_index].dirty = false;
+                        for (int i = 0; i < WORDS_PER_LINE; i++) {
+                            cache[line_index].data[i] = ram[(address / WORDS_PER_LINE) * WORDS_PER_LINE + i];
+                        }
+                        return {STATUS_DONE, cache[line_index].data[offset]};
+                    } else {
+                        return {STATUS_DONE, ram[address]};
                     }
-                    cache[line_index].valid = true;
-                    cache[line_index].tag = tag;
-                    cache[line_index].dirty = false;
-                    for (int i = 0; i < WORDS_PER_LINE; i++) {
-                        cache[line_index].data[i] = ram[(address / WORDS_PER_LINE) * WORDS_PER_LINE + i];
-                    }
-                    return {STATUS_DONE, cache[line_index].data[offset]};
                 }
                 return {STATUS_WAIT, 0};
             } else {
