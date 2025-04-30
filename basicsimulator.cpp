@@ -129,8 +129,8 @@ public:
         }
 
         // hard coded this here for testing/demoing purposes
-        memory_system.forceWrite(100, 42);
-        registers[0] = 100;
+        // memory_system.forceWrite(100, 42);
+        // registers[0] = 100;
 
         program_counter = 0;
         pipeline = vector<Instruction>(5);
@@ -345,7 +345,7 @@ public:
         int res = 0;
 
         switch (inst.opcode) {
-            case 0: case 1: res = inst.op1 + inst.immediate; break;
+            case 0: case 1: res = inst.op1 + inst.op2 + inst.immediate; break;
             case 3: //loadi
                 res = inst.op1; // c++ should automatically sign extend the value, so no need to compute that
                 break;
