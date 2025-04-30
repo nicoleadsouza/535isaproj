@@ -105,10 +105,25 @@ void SimulatorWindow::viewRegisters() {
     registerDisplay->setText(text);
 }
 
+// updated to show about 10 lines (not in real time, but when actually clicking the view memory button)
 void SimulatorWindow::viewMemory() {
     int level = memLevelInput->text().toInt();
-    int line = memLineInput->text().toInt();
-    simulator.viewMemory(level, line); // still uses console
+    int startLine = memLineInput->text().toInt();
+
+    if (level != 0 && level != 1) {
+        memoryDisplay->setPlainText("Invalid level. Use 0 for RAM or 1 for Cache.");
+        return;
+    }
+
+    std::ostringstream out;
+    std::streambuf* old = std::cout.rdbuf(out.rdbuf());
+
+    for (int i = startLine; i < startLine + 10; ++i) {
+        simulator.viewMemory(level, i);
+    }
+
+    std::cout.rdbuf(old);
+    memoryDisplay->setPlainText(QString::fromStdString(out.str()));
 }
 
 void SimulatorWindow::resetSimulator() {
