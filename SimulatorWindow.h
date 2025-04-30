@@ -6,7 +6,6 @@
 #include <QLineEdit>
 #include <QLabel>
 #include <QTextEdit>
-#include <QComboBox>
 #include "basicsimulator.cpp"
 
 class SimulatorWindow : public QMainWindow {
@@ -30,7 +29,7 @@ private:
     QLabel* pcLabel;
     QLabel* pipelineLabels[5];
     QTextEdit* registerDisplay;
-    QTextEdit* memoryDisplay; // <-- new memory output widget
+    QTextEdit* memoryDisplay;
     QLineEdit* cycleInput;
     QLineEdit* memLevelInput;
     QLineEdit* memLineInput;
