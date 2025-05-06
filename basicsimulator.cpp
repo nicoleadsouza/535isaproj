@@ -367,6 +367,8 @@ public:
                     Instruction emptyInst;
                     emptyInst.is_empty = true;
                     pipeline[STAGE_FETCH] = pipeline[STAGE_DECODE] = pipeline[STAGE_EXECUTE] = emptyInst;
+                    // if halt flag has been set, no it hasn't
+                    pipeline_halted = false;
                 }
                 break;
             case 21: //jump
@@ -375,6 +377,8 @@ public:
                 Instruction emptyInst;
                 emptyInst.is_empty = true;
                 pipeline[STAGE_FETCH] = pipeline[STAGE_DECODE] = pipeline[STAGE_EXECUTE] = emptyInst;
+                // if halt flag has been set, no it hasn't
+                pipeline_halted = false;
                 break;
         }
 
@@ -437,51 +441,51 @@ public:
 // commenting out this main so it does not interfere with Qt implementation
 
 
-int main() {
-    Simulator sim;
-    string command;
+// int main() {
+//     Simulator sim;
+//     string command;
 
-    cout << "starting CacheFlow pipeline simulator...\n";
+//     cout << "starting CacheFlow pipeline simulator...\n";
 
-    while (true) {
-        cout << "\n> enter command (load/run/step/view/reset/exit/viewmem [level] [line]): ";
-        cin >> command;
+//     while (true) {
+//         cout << "\n> enter command (load/run/step/view/reset/exit/viewmem [level] [line]): ";
+//         cin >> command;
 
-        if (command == "load") {
-            string file;
-            cin >> file;
-            sim.loadProgramFromFile(file);
-            cout << "Program loaded.\n";
-        } else if (command == "run") {
-            int cycles;
-            cin >> cycles;
-            for (int i = 0; i < cycles; i++) {
-                if (sim.step() == FLAG_HALT) {
-                    cout << "Program halted.\n";
-                    break;
-                }
-                sim.displayPipeline();
-            }
-        } else if (command == "step") {
-            if (sim.step() == FLAG_HALT) {
-                cout << "Program halted.\n";
-            }
-            sim.displayPipeline();
-        } else if (command == "view") {
-            sim.viewRegisters();
-        } else if (command == "reset") {
-            sim = Simulator();
-            cout << "Simulator reset.\n";
-        } else if (command == "exit") {
-            break;
-        } else if (command == "viewmem") {
-            int level, line;
-            cin >> level >> line;
-            sim.viewMemory(level, line);
-        } else {
-            cout << "Unknown command.\n";
-        }
-    }
+//         if (command == "load") {
+//             string file;
+//             cin >> file;
+//             sim.loadProgramFromFile(file);
+//             cout << "Program loaded.\n";
+//         } else if (command == "run") {
+//             int cycles;
+//             cin >> cycles;
+//             for (int i = 0; i < cycles; i++) {
+//                 if (sim.step() == FLAG_HALT) {
+//                     cout << "Program halted.\n";
+//                     break;
+//                 }
+//                 sim.displayPipeline();
+//             }
+//         } else if (command == "step") {
+//             if (sim.step() == FLAG_HALT) {
+//                 cout << "Program halted.\n";
+//             }
+//             sim.displayPipeline();
+//         } else if (command == "view") {
+//             sim.viewRegisters();
+//         } else if (command == "reset") {
+//             sim = Simulator();
+//             cout << "Simulator reset.\n";
+//         } else if (command == "exit") {
+//             break;
+//         } else if (command == "viewmem") {
+//             int level, line;
+//             cin >> level >> line;
+//             sim.viewMemory(level, line);
+//         } else {
+//             cout << "Unknown command.\n";
+//         }
+//     }
 
-    return 0;
-}
+//     return 0;
+// }
