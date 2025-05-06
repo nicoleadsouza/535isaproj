@@ -3,7 +3,7 @@
 
 # constants
 LOADI R1 40                         # location of array, memory address 64
-LOADI R2 5                          # length of array, 5 for basic testing
+LOADI R2 10                          # length of array, 5 for basic testing
 LOADI R3 1                          # having a register with 1 in it is just useful
 
 # populate array
