@@ -207,6 +207,19 @@ public:
             if (!use_pipeline) keep_fetching = false;
         }
 
+        // check if the simulation is halted and the pipeline is fully drained (to prevent infinite loop for run to end)
+        bool all_stages_empty = true;
+        for (const auto& stage : pipeline) {
+            if (!stage.is_empty) {
+                all_stages_empty = false;
+                break;
+            }
+        }
+        
+        if (pipeline_halted && all_stages_empty) {
+            return FLAG_HALT;
+        }
+
         cycle_count++;
         return FLAG_RUNNING;
     }
