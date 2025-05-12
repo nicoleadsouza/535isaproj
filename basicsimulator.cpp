@@ -1,13 +1,12 @@
 #include <iostream>
 #include <vector>
-#include <unordered_map>
 #include <fstream>
 #include <iomanip>
-#include "memoryUI.cpp" // includes memory system
+#include <string>
+#include "memoryUI.cpp"
 
 using namespace std;
 
-// simulator constants
 constexpr int NUM_REGISTERS = 16;
 constexpr int STAGE_FETCH = 0;
 constexpr int STAGE_DECODE = 1;
@@ -20,7 +19,6 @@ constexpr int TYPE_MEMORY = 2;
 constexpr int FLAG_HALT = 1;
 constexpr int FLAG_RUNNING = 0;
 
-// instruction structure
 struct Instruction {
     int addr = -1;
     unsigned int binary = -1;
@@ -46,7 +44,10 @@ private:
     MemorySystem memory_system;
     int cycle_count = 0;
     bool pipeline_halted = false;
+    int instruction_count = 0;
+
     vector<Instruction> pipeline = vector<Instruction>(5);
+
     bool use_pipeline;
     bool keep_fetching = true;
 
@@ -112,16 +113,9 @@ private:
     }
 
 public:
-    //Simulator() : registers(NUM_REGISTERS, 0), program_counter(0) {}
-    // optionally can specifify whether to use pipeline and cache
-    Simulator(bool pipe = true, bool cache = true) : registers(NUM_REGISTERS, 0), program_counter(0), use_pipeline(pipe), memory_system(cache) {}
-
-    // --- ADDED public getter methods for Qt UI ---
-    int getCycleCount() const { return cycle_count; }
-    int getProgramCounter() const { return program_counter; }
-    int viewRegister(int reg) const { return registers[reg]; }
-    string getStageDisplayText(int stage) const { return getStageDisplay(pipeline[stage], stage); }
-    // ------------------------------------------------
+    Simulator(bool pipe = true, bool cache = true)
+        : registers(NUM_REGISTERS, 0), program_counter(0),
+          use_pipeline(pipe), memory_system(cache) {}
 
     void loadProgramFromFile(const string& filename) {
         ifstream infile(filename);
@@ -131,13 +125,10 @@ public:
             memory_system.forceWrite(addr, instr);
             addr++;
         }
-
-        // hard coded this here for testing/demoing purposes
-        // memory_system.forceWrite(100, 42);
-        // registers[0] = 100;
-
         program_counter = 0;
         pipeline = vector<Instruction>(5);
+        cycle_count = 0;
+        instruction_count = 0;
     }
 
     int step() {
@@ -431,10 +422,22 @@ public:
             cout << "R" << setw(2) << i << ": " << registers[i] << "\n";
     }
 
+    // getters for Qt GUI
+
+    int getCycleCount() const { return cycle_count; }
+    int getProgramCounter() const { return program_counter; }
+    int viewRegister(int reg) const { return registers[reg]; }
+    string getStageDisplayText(int stage) const { return getStageDisplay(pipeline[stage], stage); }
+    int getInstructionCount() const { return instruction_count; }
+    int getCacheHits() const { return memory_system.getHits(); }
+    int getCacheMisses() const { return memory_system.getMisses(); }
+
     void viewMemory (int level, int line) {
         return memory_system.view(level, line);
     }
 };
+
+
 
 // simple command line UI, did not get around to using Qt or something more advanced 
 
