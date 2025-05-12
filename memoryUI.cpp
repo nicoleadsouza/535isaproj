@@ -1,3 +1,4 @@
+#pragma once
 #include <iostream>
 #include <vector>
 #include <unordered_map>
@@ -35,6 +36,9 @@ private:
     bool useCache;
     bool accessing_cache = false;
     bool accessing_ram = false;
+
+    int hits = 0;
+    int misses = 0;
 
 public:
     MemorySystem(bool cache) : ram(RAM_SIZE, 0), cache(CACHE_LINES), useCache(cache) {}
@@ -100,6 +104,7 @@ public:
                 cycle_count--;
                 if (cycle_count == 0) {
                     accessing_cache = false;
+                    hits++; // update hits
                     return {STATUS_DONE, cache[line_index].data[offset]};
                 }
                 return {STATUS_WAIT, 0};
@@ -128,6 +133,7 @@ public:
                         for (int i = 0; i < WORDS_PER_LINE; i++) {
                             cache[line_index].data[i] = ram[((address / WORDS_PER_LINE) * WORDS_PER_LINE) + i];
                         }
+                        misses++; // update misses
                         return {STATUS_DONE, cache[line_index].data[offset]};
                     } else {
                         return {STATUS_DONE, ram[address]};
@@ -168,4 +174,7 @@ public:
         }
         return 0;
     }
+
+    int getHits() const { return hits; }
+    int getMisses() const { return misses; }
 };
